@@ -26,10 +26,12 @@ Last Edit : 10/10
 //#include <time.h>
 
 /* You will have to modify the program below */
-#define LISTENQ 3 
+#define LISTENQ 100 
 #define SERV_PORT 3000
 
 #define MAXCOLSIZE 100
+#define HTTPREQ 	3
+
 
 
 
@@ -49,7 +51,8 @@ Last Edit : 10/10
 
 typedef char type2D[10][MAXCOMMANDSIZE];
 
-typedef enum TYPEACK{NOACK,ACK,TIMEDACK}ACK_TYPE;
+typedef enum HTTPFORMAT{RM,RU,RV}HTTP_FM;
+//typedef enum HTTPFORMAT{RM,RU,RV}HTTP_FM;
 
 
 int server_sock,client_sock;                           //This will be our socket
@@ -59,7 +62,24 @@ int nbytes;                        //number of bytes we receive in our message
 char ack_message[ACKMESSAGE];
 
 //Time set for Time out 
-struct timeval timeout={0,100000};      
+struct timeval timeout={0,100000};     
+
+
+
+//void responsetoClient(char (*splitop)[MAXCOLSIZE]){}
+
+
+
+
+
+
+
+
+
+
+
+
+
 /*************************************************************
 //Split string on basis of delimiter 
 //Assumtion is string is ended by a null character
@@ -73,9 +93,7 @@ http://stackoverflow.com/questions/20174965/split-a-string-and-store-into-an-arr
 **************************************************************/
 int splitString(char *splitip,char *delimiter,char (*splitop)[100],int maxattr)
 {
-	printf("In Split\n");
-
-	int sizeofip=0,i=0;
+	int sizeofip=1,i=1;
 	char *p=NULL;//token
 	char *temp_str = NULL;
 	
@@ -116,7 +134,7 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[100],int maxattr)
 		//allocate size of each string 
 		//copy the token tp each string 
 		strncpy(splitop[sizeofip],p,strlen(p));
-		printf("%s\n",splitop[sizeofip]);
+		printf("%d %s\n",sizeofip,splitop[sizeofip]);
 		sizeofip++;
 
 		//get next token 
@@ -156,9 +174,9 @@ void *client_connections(void *client_sock_id)
 			printf("%s\n",message_client );
 			//write(thread_sock,message_client,strlen(message_client));
 			printf("Message length%d\n",strlen(message_client) );
-			if ((split_attr=malloc(sizeof(split_attr)*MAXCOLSIZE*strlen(message_client)))){	
+			if ((split_attr=malloc(sizeof(split_attr)*MAXCOLSIZE))){	
 		
-				if((total_attr_commands=splitString(message_client," ",split_attr,3))<0)
+				if((total_attr_commands=splitString(message_client," ",split_attr,4))<0)
 				{
 					printf("Error in split\n");
 
@@ -172,7 +190,20 @@ void *client_connections(void *client_sock_id)
 					//printf("%s\n", );
 					bzero(message_client,sizeof(message_client));	
 					bzero(split_attr,sizeof(split_attr));				
-				}		
+				}
+				//print the split value 
+				printf("In Thread\n");
+				for(i=0;i<total_attr_commands;i++){
+					printf("%d %s\n",i,split_attr[i]);
+				}
+				printf("%s\n",split_attr[0] );
+
+				//free alloaction of memory 
+				for(i=0;i<total_attr_commands;i++){
+					free((*split_attr)[i]);
+				}
+				free(split_attr);
+						
 			}
 			else 
 			{
@@ -186,11 +217,9 @@ void *client_connections(void *client_sock_id)
 			return NULL;
 
 		}
-		//free alloaction of memory 
-		for(i=0;i<total_attr_commands;i++){
-			free((*split_attr)[i]);
-		}
-	free(split_attr);
+
+
+		
 	printf("Completed \n");
 
 	//free(client_sock_id);//free the memory 
