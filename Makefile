@@ -10,7 +10,7 @@ CDEFS =
 CFLAGS= -o
 LDFLAGS= -lcrypto -lssl -lpthread
 
-PRODUCT=server client
+PRODUCT= server client
 
 all: $(PRODUCT)
 	
