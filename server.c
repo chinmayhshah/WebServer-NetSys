@@ -49,9 +49,30 @@ Last Edit : 10/10
 #define ERRMESSAGE 20
 
 
+
+#define DEBUGLEVEL
+
+#ifdef DEBUGLEVEL
+	#define DEBUG 1
+#else
+	#define	DEBUG 0
+#endif
+
+#define DEBUG_PRINT(fmt, args...) \
+        do { if (DEBUG) fprintf(stderr, "\n %s:%d:%s(): " fmt, __FILE__, \
+                                __LINE__, __FUNCTION__, ##args); } while (0)
+
+
 typedef char type2D[10][MAXCOMMANDSIZE];
 
-typedef enum HTTPFORMAT{RM,RU,RV}HTTP_FM;
+typedef enum HTTPFORMAT{
+							HttpExtra,//Extra Character
+							HttpMethod,//Resource Method
+							HttpURL,// Resource URL
+							HttpVersion //Resource Version 
+						}HTTP_FM;// Resource format
+
+
 //typedef enum HTTPFORMAT{RM,RU,RV}HTTP_FM;
 
 
@@ -64,9 +85,67 @@ char ack_message[ACKMESSAGE];
 //Time set for Time out 
 struct timeval timeout={0,100000};     
 
+//fixed Root , take from configuration file 
+char * ROOT = "/home/chinmay/Desktop/5273/PA2/www";
 
 
-//void responsetoClient(char (*splitop)[MAXCOLSIZE]){}
+int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
+
+		char response_message[MAXBUFSIZE];//store message from client 
+		char path[MAXPACKSIZE];
+		int filedesc;
+		ssize_t send_bytes;
+		char sendData[MAXPACKSIZE];
+		//
+		DEBUG_PRINT("In response Client\n");
+
+		//check for Method
+		if(!strcmp(request[HttpMethod],"GET")){//if first element 
+			DEBUG_PRINT("Got GET");
+		}
+		else
+		{
+			DEBUG_PRINT("Not working");
+		}	
+
+		//check for version 
+		if (!strncmp(request[HttpVersion],"HTTP/1.1",8)){//if first element 
+			DEBUG_PRINT("Got HTTP");
+		}
+		else
+		{
+			DEBUG_PRINT("Not working %s",request[HttpVersion]);
+		}		
+		//strcpy(response_message,"HTTP/1.1 200 OK\n\n");
+		strcpy(response_message,"HTTP/1.1 404 Not Found\n<html><body>404	Not	Found	Reason	URL	does not	exist:<<requested url>></body></html>\n\n\n");
+		DEBUG_PRINT("%s socket %d",response_message,thread_sock);
+		//send OK Status to client 
+		write(thread_sock,response_message,strlen(response_message));
+		
+		//read the defaut index file 
+		
+		strcpy(&path[strlen(ROOT)],"/index.html");//adjust the path , pick from config  file 
+		DEBUG_PRINT("%s",path);
+
+		//Open the file ,read and send the files 
+		if ((filedesc=open(path,O_RDONLY))<1){//if File  not Found 
+			perror("File not Found");
+			strcpy(response_message,"HTTP/1.1 404 Not Found\n<html><body>404	Not	Found	Reason	URL	does	not	exist	:<<requested url>></body></html>\n\n");
+			write(thread_sock,response_message,strlen(response_message));	
+		}
+		else
+		{
+			//send OK status 
+			strcpy(response_message,"HTTP/1.1 200 OK\n\n");
+			write(thread_sock,response_message,strlen(response_message));		
+			while((send_bytes=read(filedesc,sendData,MAXPACKSIZE))>0){
+				write(thread_sock,sendData,strlen(sendData));		
+			}
+		}
+		
+
+		return 0;
+}
 
 
 
@@ -91,7 +170,7 @@ o/p : splitop - Parsed 2 D array of strings
 Referred as previous code limits number of strings parsed 	  
 http://stackoverflow.com/questions/20174965/split-a-string-and-store-into-an-array-of-strings
 **************************************************************/
-int splitString(char *splitip,char *delimiter,char (*splitop)[100],int maxattr)
+int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int maxattr)
 {
 	int sizeofip=1,i=1;
 	char *p=NULL;//token
@@ -164,21 +243,21 @@ void *client_connections(void *client_sock_id)
 	
 	char (*split_attr)[MAXCOLSIZE];
 	//char *message ; // message to client 
-	printf("passed Client connection %d\n",(int)client_sock_id);
+	DEBUG_PRINT("passed Client connection %d\n",(int)client_sock_id);
 	
 	
 
 		// Recieve the message from client  and reurn back to client 
-		while((read_bytes =recv(thread_sock,message_client,MAXPACKSIZE,0))>0){
+		if((read_bytes =recv(thread_sock,message_client,MAXPACKSIZE,0))>0){
 
 			printf("%s\n",message_client );
 			//write(thread_sock,message_client,strlen(message_client));
-			printf("Message length%d\n",strlen(message_client) );
+			DEBUG_PRINT("Message length%d\n",strlen(message_client) );
 			if ((split_attr=malloc(sizeof(split_attr)*MAXCOLSIZE))){	
 		
 				if((total_attr_commands=splitString(message_client," ",split_attr,4))<0)
 				{
-					printf("Error in split\n");
+					DEBUG_PRINT("Error in split\n");
 
 					//printf("%s\n", );
 					bzero(message_client,sizeof(message_client));	
@@ -192,17 +271,19 @@ void *client_connections(void *client_sock_id)
 					bzero(split_attr,sizeof(split_attr));				
 				}
 				//print the split value 
-				printf("In Thread\n");
+				
 				for(i=0;i<total_attr_commands;i++){
 					printf("%d %s\n",i,split_attr[i]);
 				}
 				printf("%s\n",split_attr[0] );
-
+				responsetoClient(split_attr,thread_sock);
+							
 				//free alloaction of memory 
 				for(i=0;i<total_attr_commands;i++){
 					free((*split_attr)[i]);
 				}
-				free(split_attr);
+				
+				free(split_attr);//clear  the request recieved 
 						
 			}
 			else 
@@ -220,7 +301,8 @@ void *client_connections(void *client_sock_id)
 
 
 		
-	printf("Completed \n");
+	DEBUG_PRINT("Completed \n");
+	//free(thread_sock);//free the connection 
 
 	//free(client_sock_id);//free the memory 
 	return 1 ;
@@ -247,7 +329,7 @@ int main (int argc, char * argv[] ){
 	pthread_t client_thread;
 	//Causes the system to create a generic socket of type TCP (strean)
 	if ((server_sock =socket(AF_INET,SOCK_STREAM,0)) < 0){
-		printf("unable to create tcp socket");
+		DEBUG_PRINT("unable to create tcp socket");
 		exit(-1);
 	}
 	/******************
@@ -256,7 +338,7 @@ int main (int argc, char * argv[] ){
 	 ******************/
 	if (bind(server_sock, (struct sockaddr *)&server, sizeof(server)) < 0){
 		close(server_sock);
-		printf("unable to bind socket\n");
+		DEBUG_PRINT("unable to bind socket\n");
 		exit(-1);
 	}
 	//
@@ -269,7 +351,7 @@ int main (int argc, char * argv[] ){
 	}
 
 
-	printf("Server is running wait for connections \n");
+	DEBUG_PRINT("Server is running wait for connections");
 
 	//Accept incoming connections 
 	while((client_sock = accept(server_sock,(struct sockaddr *) &client, (socklen_t *)&remote_length))){
@@ -278,7 +360,7 @@ int main (int argc, char * argv[] ){
 			exit(-1);
 			close(server_sock);
 		}
-		printf("connection accepted  %d \n",(int)client_sock);	
+		DEBUG_PRINT("connection accepted  %d \n",(int)client_sock);	
 		mult_sock = (int *)malloc(1);
 		if (mult_sock== NULL)//allocate a space of 1 
 		{
@@ -286,25 +368,26 @@ int main (int argc, char * argv[] ){
 			close(server_sock);
 			exit(-1);
 		}
-		printf("Malloc successfully\n");
+		DEBUG_PRINT("Malloc successfully\n");
 		//bzero(mult_sock,sizeof(mult_sock));
 		*mult_sock = client_sock;
 
-		printf("connection accepted  %d \n",*mult_sock);	
+		DEBUG_PRINT("connection accepted  %d \n",*mult_sock);	
 		//Create the pthread 
 		if ((pthread_create(&client_thread,NULL,client_connections,(void *)(*mult_sock)))<0){
 			close(server_sock);
 			perror("Thread not created");
 			exit(-1);
 
-		}		
-
-		
-		
+		}				
+		/*
+		//as it does  have to wait for it to join thread ,
+		//does not allow multiple connections 
 		if(pthread_join(client_thread, NULL) == 0)
 		 printf("Client Thread done\n");
 		else
 		 perror("Client Thread");
+		 */
 		free(mult_sock);
 
 	}	
@@ -324,109 +407,3 @@ int main (int argc, char * argv[] ){
 }
 		
 
-
-	
-	/*
-	//printf("Socket created and binded \n");
-	char msg[] = "ok";
-	type2D *action;
-	char temp[10][MAXCOMMANDSIZE];
-	action = &temp;
-	strcpy(**action,"ls ");
-	char request[MAXCOMMANDSIZE];
-
-	int total_attr_commands;
-	int garbage_count=0;
-	int check_bytes=2;
-	
-
-	while (1)
-	{
-		
-		
-		action = &temp;
-		bzero(request,sizeof(request));
-		bzero(action,sizeof(action));	
-		
-		//waits for an incoming message
-		nbytes = recv(server_sock,request,sizeof(request),0,(struct sockaddr*)&server,&remote_length);
-		if ((strlen(request)>0) && (request[strlen(request)-1]=='\n')){
-				request[strlen(request)-1]='\0';
-		}
-		//memcpy(request,request,sizeof(request)-1);
-		
-		if(garbage_count)
-		{
-			check_bytes=0;
-		}
-		sendtoClient(ack_message,sizeof(ack_message),NOACK);
-		//Messaged received successfully
-		printf("\nRxcv request : %s bytes %d \n",request,nbytes );
-		
-
-
-
-		strcat(request,"\0");
-		if (nbytes >0){
-				total_attr_commands=splitString(request," ",action);	
-					if(total_attr_commands>=0)
-					{
-							//printf("request not supported\n");
-							
-						int count=0;
-						action = &temp;
-						garbage_count++;
-						//printf("Action : %s\n",**action );
-						//Check type of request
-						if (strcmp(**action,"ls")==0){							
-									**action++;//gr
-									//printf("value after ls :%s\n", **action);
-									if (strlen(**action)>check_bytes){
-									//	printf("request not supported\n");
-										sendtoClient("request not supported",sizeof("request not supported"),NOACK);							
-									}	
-									else if(list()<0){
-									//		printf("Error in listing!!!\n");
-											sendtoClient("Error",sizeof("Error"),NOACK);
-										}		
-								}
-						else if (strcmp(**action,"get")==0){
-									//printf("in get\n");
-									**action++;//gr
-									if(sendFile(**action) <0){	
-										//printf("Error in get!!!\n");
-										sendtoClient("Error",sizeof("Error"),NOACK);
-									}
-								}
-						else if (strcmp(**action,"put")==0){
-									//printf("in put\n");
-									**action++;
-									//printf("File %s\n",**action);
-									if(rcvFile(**action) <0){	
-										//printf("Error in put!!!\n");
-										//sendtoClient("Error");
-									}
-								}
-						else if (strcmp(**action,"exit")==0){
-									printf("Exiting server .........\n");
-									close(server_sock);
-									break;
-								}
-						else 	{
-									sendtoClient(request,sizeof(request),NOACK);
-									//printf("request not supported\n");
-								}
-						//clearing the split value 		
-						bzero(action,sizeof(action));		
-					}	
-						
-		}
-
-		//sendtoClient(msg);
-	}
-		
-	//close the socket 
-	close(server_sock);
-
-}
-	*/
