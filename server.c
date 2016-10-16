@@ -91,23 +91,19 @@ char * ROOT = "/home/chinmay/Desktop/5273/PA2/www";
 
 int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 
-		char response_message[MAXBUFSIZE];//store message from client 
+		char response_message[MAXBUFSIZE];//store message from client// 
 		char path[MAXPACKSIZE];
 		int filedesc;
 		ssize_t send_bytes;
-		char sendData[MAXPACKSIZE];
-		//
-		DEBUG_PRINT("In response Client\n");
-
+		char sendData[MAXBUFSIZE];
+		//		
 		//check for Method
 		if(!strcmp(request[HttpMethod],"GET")){//if first element 
 			DEBUG_PRINT("Got GET");
 		}
-		else
-		{
-			DEBUG_PRINT("Not working");
+		else{
+					DEBUG_PRINT("Not working");
 		}	
-
 		//check for version 
 		if (!strncmp(request[HttpVersion],"HTTP/1.1",8)){//if first element 
 			DEBUG_PRINT("Got HTTP");
@@ -117,32 +113,49 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 			DEBUG_PRINT("Not working %s",request[HttpVersion]);
 		}		
 		//strcpy(response_message,"HTTP/1.1 200 OK\n\n");
-		strcpy(response_message,"HTTP/1.1 404 Not Found\n<html><body>404	Not	Found	Reason	URL	does not	exist:<<requested url>></body></html>\n\n\n");
-		DEBUG_PRINT("%s socket %d",response_message,thread_sock);
+		//strcpy(response_message,"HTTP/1.1 404 Not Found\n<html><body>404	Not	Found	Reason	URL	does not	exist:<<requested url>></body></html>\n\n\n");
+		//DEBUG_PRINT("%s socket %d",response_message,thread_sock);
 		//send OK Status to client 
-		write(thread_sock,response_message,strlen(response_message));
+		//write(thread_sock,response_message,strlen(response_message));
 		
 		//read the defaut index file 
-		
-		strcpy(&path[strlen(ROOT)],"/index.html");//adjust the path , pick from config  file 
-		DEBUG_PRINT("%s",path);
+		memset(path,0,sizeof(path));
+		//DEBUG_PRINT("Root %s  ",ROOT);
+		strcpy(path,ROOT);
+		//strcat(path,"/index.html");
+		strcat(path,request[HttpURL]);
+		memset(sendData,0,sizeof(sendData));
+		memset(response_message,0,sizeof(response_message));
+		//strcpy(&path[strlen(ROOT)],"/index.html");//adjust the path , pick from config  file 
+		DEBUG_PRINT("Path %s   ",path);
 
 		//Open the file ,read and send the files 
+		//strcpy(response_message,"HTTP/1.1 404 Not Found\n<html><body>404	Not	Found	Reason	URL	does	not	exist	:<<requested url>></body></html>\n\n");
+		//DEBUG_PRINT("%s",response_message);
+		//write(thread_sock,response_message,strlen(response_message));	
+		
 		if ((filedesc=open(path,O_RDONLY))<1){//if File  not Found 
 			perror("File not Found");
 			strcpy(response_message,"HTTP/1.1 404 Not Found\n<html><body>404	Not	Found	Reason	URL	does	not	exist	:<<requested url>></body></html>\n\n");
 			write(thread_sock,response_message,strlen(response_message));	
+			DEBUG_PRINT("%s",response_message);
 		}
+		
 		else
 		{
 			//send OK status 
+			DEBUG_PRINT("Reading File");
+			//send success message
 			strcpy(response_message,"HTTP/1.1 200 OK\n\n");
-			write(thread_sock,response_message,strlen(response_message));		
-			while((send_bytes=read(filedesc,sendData,MAXPACKSIZE))>0){
-				write(thread_sock,sendData,strlen(sendData));		
+			write(thread_sock,response_message,sizeof(response_message));		
+			//send data 
+			while((send_bytes=read(filedesc,sendData,MAXBUFSIZE))>0){
+				send(thread_sock,sendData,send_bytes,0);		
 			}
 		}
 		
+		
+
 
 		return 0;
 }
@@ -212,8 +225,11 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 
 		//allocate size of each string 
 		//copy the token tp each string 
+		//bzero(splitop[sizeofip],strlen(p));
+		memset(splitop[sizeofip],0,sizeof(splitop[sizeofip]));
 		strncpy(splitop[sizeofip],p,strlen(p));
-		printf("%d %s\n",sizeofip,splitop[sizeofip]);
+		strcat(splitop[sizeofip],"\0");
+		DEBUG_PRINT("%d %s\n",sizeofip,splitop[sizeofip]);
 		sizeofip++;
 
 		//get next token 
@@ -244,16 +260,19 @@ void *client_connections(void *client_sock_id)
 	char (*split_attr)[MAXCOLSIZE];
 	//char *message ; // message to client 
 	DEBUG_PRINT("passed Client connection %d\n",(int)client_sock_id);
-	
+
 	
 
 		// Recieve the message from client  and reurn back to client 
 		if((read_bytes =recv(thread_sock,message_client,MAXPACKSIZE,0))>0){
 
 			printf("%s\n",message_client );
-			//write(thread_sock,message_client,strlen(message_client));
+			
 			DEBUG_PRINT("Message length%d\n",strlen(message_client) );
+			
 			if ((split_attr=malloc(sizeof(split_attr)*MAXCOLSIZE))){	
+				//bzero(split_attr,sizeof(split_attr));
+				//bzero(message_client,sizeof(message_client));
 		
 				if((total_attr_commands=splitString(message_client," ",split_attr,4))<0)
 				{
@@ -302,6 +321,10 @@ void *client_connections(void *client_sock_id)
 
 		
 	DEBUG_PRINT("Completed \n");
+	//Closing SOCKET
+    shutdown (thread_sock, SHUT_RDWR);         //All further send and recieve operations are DISABLED...
+    close(thread_sock);
+    thread_sock=-1;
 	//free(thread_sock);//free the connection 
 
 	//free(client_sock_id);//free the memory 
