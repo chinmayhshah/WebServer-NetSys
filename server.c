@@ -26,31 +26,25 @@ Last Edit : 10/10
 //#include <time.h>
 
 /* You will have to modify the program below */
-#define LISTENQ 100 
+#define LISTENQ 1000 
 #define SERV_PORT 3000
 
 #define MAXCOLSIZE 100
-#define HTTPREQ 	3
+#define HTTPREQ 	30
 
 
 
 
 
 
-#define MAXBUFSIZE 60000
-#define MAXPACKSIZE 2000
+#define MAXBUFSIZE 600
+#define MAXPACKSIZE 200
 #define MAXCOMMANDSIZE 100
-#define PACKETNO 7
-#define SIZEMESSAGE 7
-#define ACKMESSAGE 4+PACKETNO
-#define MAXFRAMESIZE (PACKETNO+SIZEMESSAGE+ MAXPACKSIZE)
-#define MAXREPEATCOUNT 3
-#define RELIABILITY
-#define ERRMESSAGE 20
 
 
 
-#define DEBUGLEVEL
+
+//#define DEBUGLEVEL
 
 #ifdef DEBUGLEVEL
 	#define DEBUG 1
@@ -80,95 +74,13 @@ int server_sock,client_sock;                           //This will be our socket
 struct sockaddr_in server, client;     //"Internet socket address structure"
 unsigned int remote_length;         //length of the sockaddr_in structure
 int nbytes;                        //number of bytes we receive in our message
-char ack_message[ACKMESSAGE];
+
 
 //Time set for Time out 
 struct timeval timeout={0,100000};     
 
 //fixed Root , take from configuration file 
 char * ROOT = "/home/chinmay/Desktop/5273/PA2/www";
-
-
-int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
-
-		char response_message[MAXBUFSIZE];//store message from client// 
-		char path[MAXPACKSIZE];
-		int filedesc;
-		ssize_t send_bytes;
-		char sendData[MAXBUFSIZE];
-		//		
-		//check for Method
-		if(!strcmp(request[HttpMethod],"GET")){//if first element 
-			DEBUG_PRINT("Got GET");
-		}
-		else{
-					DEBUG_PRINT("Not working");
-		}	
-		//check for version 
-		if (!strncmp(request[HttpVersion],"HTTP/1.1",8)){//if first element 
-			DEBUG_PRINT("Got HTTP");
-		}
-		else
-		{
-			DEBUG_PRINT("Not working %s",request[HttpVersion]);
-		}		
-		//strcpy(response_message,"HTTP/1.1 200 OK\n\n");
-		//strcpy(response_message,"HTTP/1.1 404 Not Found\n<html><body>404	Not	Found	Reason	URL	does not	exist:<<requested url>></body></html>\n\n\n");
-		//DEBUG_PRINT("%s socket %d",response_message,thread_sock);
-		//send OK Status to client 
-		//write(thread_sock,response_message,strlen(response_message));
-		
-		//read the defaut index file 
-		memset(path,0,sizeof(path));
-		//DEBUG_PRINT("Root %s  ",ROOT);
-		strcpy(path,ROOT);
-		//strcat(path,"/index.html");
-		strcat(path,request[HttpURL]);
-		memset(sendData,0,sizeof(sendData));
-		memset(response_message,0,sizeof(response_message));
-		//strcpy(&path[strlen(ROOT)],"/index.html");//adjust the path , pick from config  file 
-		DEBUG_PRINT("Path %s   ",path);
-
-		//Open the file ,read and send the files 
-		//strcpy(response_message,"HTTP/1.1 404 Not Found\n<html><body>404	Not	Found	Reason	URL	does	not	exist	:<<requested url>></body></html>\n\n");
-		//DEBUG_PRINT("%s",response_message);
-		//write(thread_sock,response_message,strlen(response_message));	
-		
-		if ((filedesc=open(path,O_RDONLY))<1){//if File  not Found 
-			perror("File not Found");
-			strcpy(response_message,"HTTP/1.1 404 Not Found\n<html><body>404	Not	Found	Reason	URL	does	not	exist	:<<requested url>></body></html>\n\n");
-			write(thread_sock,response_message,strlen(response_message));	
-			DEBUG_PRINT("%s",response_message);
-		}
-		
-		else
-		{
-			//send OK status 
-			DEBUG_PRINT("Reading File");
-			//send success message
-			strcpy(response_message,"HTTP/1.1 200 OK\n\n");
-			write(thread_sock,response_message,sizeof(response_message));		
-			//send data 
-			while((send_bytes=read(filedesc,sendData,MAXBUFSIZE))>0){
-				send(thread_sock,sendData,send_bytes,0);		
-			}
-		}
-		
-		
-
-
-		return 0;
-}
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -221,7 +133,7 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 		//Token Used
 		strcat(p,"\0");
 		// Set the split o/p pointer 
-		splitop = temp_str;
+		//splitop[0] = temp_str;
 
 		//allocate size of each string 
 		//copy the token tp each string 
@@ -229,7 +141,7 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 		memset(splitop[sizeofip],0,sizeof(splitop[sizeofip]));
 		strncpy(splitop[sizeofip],p,strlen(p));
 		strcat(splitop[sizeofip],"\0");
-		DEBUG_PRINT("%d %s\n",sizeofip,splitop[sizeofip]);
+		//DEBUG_PRINT("%d %s\n",sizeofip,splitop[sizeofip]);
 		sizeofip++;
 
 		//get next token 
@@ -242,6 +154,207 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 }
 
 
+
+int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
+
+		char response_message[MAXBUFSIZE];//store message from client// 
+		char path[MAXPACKSIZE],copypath[MAXPACKSIZE];
+		int filedesc=0,filesize=0;
+		ssize_t send_bytes=0,total_size=0;
+		char sendData[MAXBUFSIZE];
+		struct stat *file_stats=NULL;
+		char file_type[MAXCOLSIZE];
+		int total_attr_commands=0,i=0;
+		char *p=NULL;
+		char *lastptr=NULL;
+		//		
+		//check for Method
+		if(!strcmp(request[HttpMethod],"GET")){//if first element 
+			DEBUG_PRINT("Got GET");
+		}
+		else{
+					DEBUG_PRINT("Not working");
+		}	
+		//check for version 
+		if (!strncmp(request[HttpVersion],"HTTP/1.1",8)){//if first element 
+			DEBUG_PRINT("Got HTTP 1.1");
+			strcmp(request[HttpVersion],"HTTP/1.1");
+		}
+		else if(!strncmp(request[HttpVersion],"HTTP/1.0",8)){
+			DEBUG_PRINT("Got HTTP 1.0");
+			strcmp(request[HttpVersion],"HTTP/1.0");
+		}
+		else
+		{
+			DEBUG_PRINT("Not working %s",request[HttpVersion]);
+		}		
+		//strcpy(response_message,"HTTP/1.1 200 OK\n\n");
+		//strcpy(response_message,"HTTP/1.1 404 Not Found\n<html><body>404	Not	Found	Reason	URL	does not	exist:<<requested url>></body></html>\n\n\n");
+		//DEBUG_PRINT("%s socket %d",response_message,thread_sock);
+		//send OK Status to client 
+		//write(thread_sock,response_message,strlen(response_message));
+		
+		//read the defaut index file 
+		memset(path,0,sizeof(path));
+		strcpy(path,ROOT);
+		DEBUG_PRINT("Path before request%s   ",path);
+		DEBUG_PRINT("request URL%s   ",request[HttpURL]);
+		strcat(path,request[HttpURL]);
+		DEBUG_PRINT("Path before request%s   ",path);
+
+
+
+		memset(sendData,0,sizeof(sendData));
+		memset(response_message,0,strlen(response_message));
+		//strcpy(&path[strlen(ROOT)],"/index.html");//adjust the path , pick from config  file 
+		
+
+		//Open the file ,read and send the files 
+		//strcpy(response_message,"HTTP/1.1 404 Not Found\n<html><body>404	Not	Found	Reason	URL	does	not	exist	:<<requested url>></body></html>\n\n");
+		//DEBUG_PRINT("%s",response_message);
+		//write(thread_sock,response_message,strlen(response_message));	
+
+		//size of file 
+		if ((filedesc=open(path,O_RDONLY))<1){//if File  not Found 
+			perror("File not Found");
+			strcpy(response_message,"HTTP/1.1 404 Not Found\r\n<html>\n\t<body>404	Not	Found	Reason	URL	does	not	exist	:<<requested url>>\n</body>\n\t</html>\n\n");
+			write(thread_sock,response_message,strlen(response_message));	
+			DEBUG_PRINT("%s",response_message);
+		}
+		
+		else
+		{
+			//send OK status 
+			memset(response_message,0,strlen(response_message));
+			strcpy(response_message,"TEST data\r\n");
+			printf("%s",response_message);
+			//write(thread_sock,response_message,strlen(response_message));		
+			
+			//send success message
+			memset(response_message,0,strlen(response_message));
+			strcpy(response_message,"HTTP/1.1 200 OK\r\n");
+			printf("%s",response_message);
+			write(thread_sock,response_message,strlen(response_message));		
+			//DEBUG_PRINT("%s",response_message);
+
+			//for content type 
+			memset(response_message,0,strlen(response_message));
+			strcpy(copypath,path);
+			p=strtok(copypath,".");
+			if(p!=NULL)
+			{
+				//strncpy(file_type[0],p,strlen(p));
+				//DEBUG_PRINT("1st %s",file_type[0]);
+				//p=strtok(NULL,".");
+				//strncpy(file_type[1],p,strlen(p));
+				//DEBUG_PRINT("type %s",file_type[1]);
+				DEBUG_PRINT("path seached%s",path);
+				lastptr = strrchr(path,'.');
+				if(lastptr){
+					DEBUG_PRINT("last occurence %s",lastptr);
+					*lastptr++;
+					
+					strcpy(file_type,lastptr);
+					DEBUG_PRINT	("format %s \n",file_type);
+				}
+				else
+				{
+					DEBUG_PRINT("COuld not find '.' ");
+				}
+
+				if(!strcmp(file_type,"html")){
+					//strcpy(response_message,"Content-Type: ");
+					//strcat(response_message,file_type[1]); 
+					sprintf(response_message,"Content-Type: text/html\r\n");
+				}
+				else if (!strcmp(file_type,"png")){
+					sprintf(response_message,"Content-Type: image/png\r\n");
+
+				}
+				else if (!strcmp(file_type,"jpg")){
+					sprintf(response_message,"Content-Type: image/jpeg\r\n");
+
+				}
+				else if (!strcmp(file_type,"gif")){
+					sprintf(response_message,"Content-Type: image/gif\r\n");
+
+				}
+				else if (!strcmp(file_type,"jpeg")){
+					sprintf(response_message,"Content-Type: image/jpeg\r\n");
+
+				}
+				else if (!strcmp(file_type,"htm")){
+					sprintf(response_message,"Content-Type: text/html\r\n");
+
+				}
+				else if (!strcmp(file_type,"txt")){
+					sprintf(response_message,"Content-Type: text/plain\r\n");
+
+				}
+				else if (!strcmp(file_type,"css")){
+					sprintf(response_message,"Content-Type: text/css\r\n");
+
+				}
+				else if (!strcmp(file_type,"js")){
+					sprintf(response_message,"Content-Type: text/javascript\r\n");
+
+				}
+				else
+				{
+					sprintf(response_message,"Content-Type:	application/octet-stream\r\n");
+				}
+				printf("%s",response_message);
+				//write(thread_sock,response_message,strlen(response_message));			
+
+			}
+			else
+			{
+				DEBUG_PRINT("Unable to split...exit ");
+				return -1;
+			}
+			
+			
+			//for content lenght 
+			file_stats = malloc(sizeof(struct stat));
+			memset(file_stats,0,sizeof(file_stats));
+			stat(path, file_stats);
+			filesize = file_stats->st_size;
+			//DEBUG_PRINT("File size %d",filesize);
+			memset(response_message,0,strlen(response_message));
+			sprintf(response_message,"Content-Length: %d\r\n\n",(int)filesize);					
+			printf("%s",response_message);
+			write(thread_sock,response_message,strlen(response_message));		
+
+			DEBUG_PRINT("%s",response_message);
+
+			bzero(file_stats,sizeof(bzero));
+			free(file_stats);
+						
+			DEBUG_PRINT("Reading and send File data");
+			
+			memset(sendData,0,sizeof(sendData));
+			//send data 
+
+			while((send_bytes=read(filedesc,sendData,MAXBUFSIZE))>0){
+				DEBUG_PRINT("%s\n",sendData); 
+				total_size += send_bytes;
+				send(thread_sock,sendData,send_bytes,0);		
+				memset(sendData,0,sizeof(sendData));
+			}
+			DEBUG_PRINT("Total size read %d",(int)total_size);
+			memset(response_message,0,strlen(response_message));
+			strcpy(response_message,"\nCompleted\r\n");
+			printf("%s",response_message);
+			//write(thread_sock,response_message,strlen(response_message));		
+
+			close(filedesc);//close the file opened 
+		}
+	
+
+
+		return 0;
+}
+
 //Client connection for each client 
 
 void *client_connections(void *client_sock_id)
@@ -251,7 +364,7 @@ void *client_connections(void *client_sock_id)
 	int total_attr_commands=0,i=0;
 
 	//Obtain the socket desc
-	int thread_sock = (int)client_sock_id;
+	int thread_sock = (int*)(client_sock_id);
 	
 	ssize_t read_bytes=0;
 	//printf("Inside client_connections 3\n");
@@ -259,16 +372,16 @@ void *client_connections(void *client_sock_id)
 	
 	char (*split_attr)[MAXCOLSIZE];
 	//char *message ; // message to client 
-	DEBUG_PRINT("passed Client connection %d\n",(int)client_sock_id);
+	DEBUG_PRINT("passed Client connection %d\n",(int)thread_sock);
 
 	
 
 		// Recieve the message from client  and reurn back to client 
 		if((read_bytes =recv(thread_sock,message_client,MAXPACKSIZE,0))>0){
 
-			printf("%s\n",message_client );
+			DEBUG_PRINT("%s\n",message_client );
 			
-			DEBUG_PRINT("Message length%d\n",strlen(message_client) );
+			DEBUG_PRINT("Message length%d\n",(int)strlen(message_client) );
 			
 			if ((split_attr=malloc(sizeof(split_attr)*MAXCOLSIZE))){	
 				//bzero(split_attr,sizeof(split_attr));
@@ -290,11 +403,12 @@ void *client_connections(void *client_sock_id)
 					bzero(split_attr,sizeof(split_attr));				
 				}
 				//print the split value 
-				
+				/*
 				for(i=0;i<total_attr_commands;i++){
 					printf("%d %s\n",i,split_attr[i]);
 				}
 				printf("%s\n",split_attr[0] );
+				*/
 				responsetoClient(split_attr,thread_sock);
 							
 				//free alloaction of memory 
@@ -412,6 +526,7 @@ int main (int argc, char * argv[] ){
 		 perror("Client Thread");
 		 */
 		free(mult_sock);
+		DEBUG_PRINT("Freed");
 
 	}	
 	if (client_sock < 0)
