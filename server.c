@@ -33,18 +33,15 @@ Last Edit : 10/10
 #define HTTPREQ 	30
 
 
-
-
-
-
 #define MAXBUFSIZE 600
 #define MAXPACKSIZE 200
+#define ERRORMSGSIZE 1000
 #define MAXCOMMANDSIZE 100
 
 
 
 
-//#define DEBUGLEVEL
+#define DEBUGLEVEL
 
 #ifdef DEBUGLEVEL
 	#define DEBUG 1
@@ -153,11 +150,28 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 	return sizeofip;//Done split and return successful 
 }
 
+int error_response(char *err_message,char Http_URL[MAXCOLSIZE],int sock,char Http_Version[MAXCOLSIZE]){
 
+	char error_message[ERRORMSGSIZE];
+	
+	//write(sock,"Check data",strlen("Check data\n"));
+	bzero(error_message,strlen(error_message));
+	
+	DEBUG_PRINT("%s",err_message);
+	
+	sprintf(error_message,"%s %s\r\n\n<head>\r\n<title>%s</title>\n\r</head>\n\r<body>\n\r<h1>%s</h1>\n\r<b>Reason :</b>	<font color=\"red\"> URL	does not exist :<font color=\"blue\">%s\n\r</body>\n\r</html>\n\r",Http_Version, err_message,err_message,err_message,Http_URL);
+	
+	DEBUG_PRINT("%s",error_message);
+	
+	write(sock,error_message,strlen(error_message));
+	
+	return 0;
+}
 
 int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 
 		char response_message[MAXBUFSIZE];//store message from client// 
+		char *response_error;
 		char path[MAXPACKSIZE],copypath[MAXPACKSIZE];
 		int filedesc=0,filesize=0;
 		ssize_t send_bytes=0,total_size=0;
@@ -188,11 +202,6 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 		{
 			DEBUG_PRINT("Not working %s",request[HttpVersion]);
 		}		
-		//strcpy(response_message,"HTTP/1.1 200 OK\n\n");
-		//strcpy(response_message,"HTTP/1.1 404 Not Found\n<html><body>404	Not	Found	Reason	URL	does not	exist:<<requested url>></body></html>\n\n\n");
-		//DEBUG_PRINT("%s socket %d",response_message,thread_sock);
-		//send OK Status to client 
-		//write(thread_sock,response_message,strlen(response_message));
 		
 		//read the defaut index file 
 		memset(path,0,sizeof(path));
@@ -202,24 +211,14 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 		strcat(path,request[HttpURL]);
 		DEBUG_PRINT("Path before request%s   ",path);
 
-
-
 		memset(sendData,0,sizeof(sendData));
 		memset(response_message,0,strlen(response_message));
-		//strcpy(&path[strlen(ROOT)],"/index.html");//adjust the path , pick from config  file 
-		
-
-		//Open the file ,read and send the files 
-		//strcpy(response_message,"HTTP/1.1 404 Not Found\n<html><body>404	Not	Found	Reason	URL	does	not	exist	:<<requested url>></body></html>\n\n");
-		//DEBUG_PRINT("%s",response_message);
-		//write(thread_sock,response_message,strlen(response_message));	
-
 		//size of file 
-		if ((filedesc=open(path,O_RDONLY))<1){//if File  not Found 
+		if ((filedesc=open(path,O_RDONLY))<1){//if File  not found 
+			
+			error_response("404 Not Found",request[HttpURL],thread_sock,request[HttpVersion]);
 			perror("File not Found");
-			strcpy(response_message,"HTTP/1.1 404 Not Found\r\n<html>\n\t<body>404	Not	Found	Reason	URL	does	not	exist	:<<requested url>>\n</body>\n\t</html>\n\n");
-			write(thread_sock,response_message,strlen(response_message));	
-			DEBUG_PRINT("%s",response_message);
+			return -1;
 		}
 		
 		else
