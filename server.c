@@ -64,6 +64,8 @@ typedef enum HTTPFORMAT{
 						}HTTP_FM;// Resource format
 
 
+
+
 //typedef enum HTTPFORMAT{RM,RU,RV}HTTP_FM;
 
 
@@ -145,12 +147,19 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 		p=strtok(NULL,delimiter);
 		
 	}
+
+	if (sizeofip<maxattr)
+	{
+		DEBUG_PRINT("unsuccessful split");
+		return -1;
+	}
+
 	
 
 	return sizeofip;//Done split and return successful 
 }
 
-int error_response(char *err_message,char Http_URL[MAXCOLSIZE],int sock,char Http_Version[MAXCOLSIZE]){
+int error_response(char *err_message,char Http_URL[MAXCOLSIZE],int sock,char Http_Version[MAXCOLSIZE],char reason[MAXCOLSIZE]){
 
 	char error_message[ERRORMSGSIZE];
 	
@@ -159,7 +168,7 @@ int error_response(char *err_message,char Http_URL[MAXCOLSIZE],int sock,char Htt
 	
 	DEBUG_PRINT("%s",err_message);
 	
-	sprintf(error_message,"%s %s\r\n\n<head>\r\n<title>%s</title>\n\r</head>\n\r<body>\n\r<h1>%s</h1>\n\r<b>Reason :</b>	<font color=\"red\"> URL	does not exist :<font color=\"blue\">%s\n\r</body>\n\r</html>\n\r",Http_Version, err_message,err_message,err_message,Http_URL);
+	sprintf(error_message,"%s %s\r\n\n<head>\r\n<title>%s</title>\n\r</head>\n\r<body>\n\r<h1>%s</h1>\n\r<b>Reason :</b>	<font color=\"red\"> %s :<font color=\"blue\">%s\n\r</body>\n\r</html>\n\r",Http_Version, err_message,err_message,err_message,reason,Http_URL);
 	
 	DEBUG_PRINT("%s",error_message);
 	
@@ -171,7 +180,6 @@ int error_response(char *err_message,char Http_URL[MAXCOLSIZE],int sock,char Htt
 int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 
 		char response_message[MAXBUFSIZE];//store message from client// 
-		char *response_error;
 		char path[MAXPACKSIZE],copypath[MAXPACKSIZE];
 		int filedesc=0,filesize=0;
 		ssize_t send_bytes=0,total_size=0;
@@ -184,39 +192,57 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 		//		
 		//check for Method
 		if(!strcmp(request[HttpMethod],"GET")){//if first element 
-			DEBUG_PRINT("Got GET");
+			DEBUG_PRINT("GET Method implemented");
 		}
 		else{
-					DEBUG_PRINT("Not working");
+			error_response("400 Bad Request",request[HttpURL],thread_sock,request[HttpVersion],"Invalid Method");
+			DEBUG_PRINT("Method isn't implemented");
+			return -1;
 		}	
 		//check for version 
 		if (!strncmp(request[HttpVersion],"HTTP/1.1",8)){//if first element 
 			DEBUG_PRINT("Got HTTP 1.1");
-			strcmp(request[HttpVersion],"HTTP/1.1");
+			
 		}
 		else if(!strncmp(request[HttpVersion],"HTTP/1.0",8)){
 			DEBUG_PRINT("Got HTTP 1.0");
-			strcmp(request[HttpVersion],"HTTP/1.0");
+			
 		}
 		else
 		{
-			DEBUG_PRINT("Not working %s",request[HttpVersion]);
+			error_response("400 Bad Request",request[HttpURL],thread_sock,request[HttpVersion],"Invalid HTTP-Version");
+			DEBUG_PRINT("Method isn't implemented");
+			return -1;
 		}		
 		
 		//read the defaut index file 
 		memset(path,0,sizeof(path));
+		
+		//**acquire root path ** left 
 		strcpy(path,ROOT);
-		DEBUG_PRINT("Path before request%s   ",path);
-		DEBUG_PRINT("request URL%s   ",request[HttpURL]);
-		strcat(path,request[HttpURL]);
-		DEBUG_PRINT("Path before request%s   ",path);
+		DEBUG_PRINT("Path before request:%s",path);
+		DEBUG_PRINT("request URL:%s",request[HttpURL]);
+		
+		
+		//Concate root path with requested URL 
+		
+		//check if no path/default location 		
+		if(!(strncmp(request[HttpURL], "/\0", 2)))  {
+			strcat(path,"/index.html");			
+		}
+		else{
+			//Concate root path with requested URL 
+			strcat(path,request[HttpURL]);			
+		}
+		DEBUG_PRINT("Path after request%s   ",path);
+
 
 		memset(sendData,0,sizeof(sendData));
 		memset(response_message,0,strlen(response_message));
 		//size of file 
 		if ((filedesc=open(path,O_RDONLY))<1){//if File  not found 
 			
-			error_response("404 Not Found",request[HttpURL],thread_sock,request[HttpVersion]);
+			error_response("404 Not Found",request[HttpURL],thread_sock,request[HttpVersion],"URL Does not Exist");
 			perror("File not Found");
 			return -1;
 		}
@@ -225,9 +251,6 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 		{
 			//send OK status 
 			memset(response_message,0,strlen(response_message));
-			strcpy(response_message,"TEST data\r\n");
-			printf("%s",response_message);
-			//write(thread_sock,response_message,strlen(response_message));		
 			
 			//send success message
 			memset(response_message,0,strlen(response_message));
@@ -300,15 +323,22 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 				}
 				else
 				{
-					sprintf(response_message,"Content-Type:	application/octet-stream\r\n");
+					//sprintf(response_message,"Content-Type:	application/octet-stream\r\n");
+					//need to add type 
+					error_response("501 Not Implemented",file_type,thread_sock,request[HttpVersion],"File type Not Implemented");
+					DEBUG_PRINT("File type is not implemented");
+					return -1;
 				}
+
+
 				printf("%s",response_message);
-				//write(thread_sock,response_message,strlen(response_message));			
+				write(thread_sock,response_message,strlen(response_message));			
 
 			}
 			else
 			{
 				DEBUG_PRINT("Unable to split...exit ");
+				error_response("500 Internal Server Error",request[HttpURL],thread_sock,request[HttpVersion],"Invalid File Name");
 				return -1;
 			}
 			
@@ -361,31 +391,28 @@ void *client_connections(void *client_sock_id)
 	
 	
 	int total_attr_commands=0,i=0;
-
-	//Obtain the socket desc
 	int thread_sock = (int*)(client_sock_id);
-	
 	ssize_t read_bytes=0;
-	//printf("Inside client_connections 3\n");
 	char message_client[MAXPACKSIZE];//store message from client 
-	
 	char (*split_attr)[MAXCOLSIZE];
-	//char *message ; // message to client 
 	DEBUG_PRINT("passed Client connection %d\n",(int)thread_sock);
+
+	
 
 	
 
 		// Recieve the message from client  and reurn back to client 
 		if((read_bytes =recv(thread_sock,message_client,MAXPACKSIZE,0))>0){
 
-			DEBUG_PRINT("%s\n",message_client );
+			DEBUG_PRINT("request from client %s\n",message_client );
 			
 			DEBUG_PRINT("Message length%d\n",(int)strlen(message_client) );
 			
 			if ((split_attr=malloc(sizeof(split_attr)*MAXCOLSIZE))){	
-				//bzero(split_attr,sizeof(split_attr));
-				//bzero(message_client,sizeof(message_client));
-		
+				strcpy(split_attr[HttpVersion],"HTTP/1.1");//Default
+				strcpy(split_attr[HttpMethod],"GET");//Default
+				strcpy(split_attr[HttpURL],"index.html");//No data 
+	
 				if((total_attr_commands=splitString(message_client," ",split_attr,4))<0)
 				{
 					DEBUG_PRINT("Error in split\n");
@@ -397,17 +424,18 @@ void *client_connections(void *client_sock_id)
 				}
 				else
 				{
-					//printf("%s\n", );
+					
 					bzero(message_client,sizeof(message_client));	
 					bzero(split_attr,sizeof(split_attr));				
+					DEBUG_PRINT("Cannot split input request");
 				}
 				//print the split value 
-				/*
+				
 				for(i=0;i<total_attr_commands;i++){
-					printf("%d %s\n",i,split_attr[i]);
+					DEBUG_PRINT("%d %s\n",i,split_attr[i]);
 				}
-				printf("%s\n",split_attr[0] );
-				*/
+				
+				
 				responsetoClient(split_attr,thread_sock);
 							
 				//free alloaction of memory 
@@ -420,6 +448,7 @@ void *client_connections(void *client_sock_id)
 			}
 			else 
 			{
+					error_response("500 Internal Server Error",split_attr[HttpURL],thread_sock,split_attr[HttpVersion],"Invalid File Name");
 					perror("alloacte 2d pointer");
 					exit(-1);
 			}		
