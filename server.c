@@ -84,6 +84,10 @@ struct ConfigData{
 		char keep_alive_time[MAXCOLSIZE];
 };
 
+
+
+struct ConfigData config;
+
 //typedef enum HTTPFORMAT{RM,RU,RV}HTTP_FM;
 
 
@@ -100,29 +104,30 @@ struct timeval timeout={0,100000};
 char * ROOT = "/home/chinmay/Desktop/5273/PA2/www";
 char *configfilename ="ws.conf";
 
-/*************************************************************
+/*******************************************************************************************
 //Parse a configutation file 
 //
 I/p : File name 
 
 Checks : 
-		2) Config File present or not
-		 Discard Commented out lines "#"
+		1) Config File present or not
+		2) Discard Commented out lines "#"
+		3) Discard Blank Lines
+		4) Start with a blank
  	  
-o/p : Pointer to a structure of required data 
+o/p : Structure of data for configuration file 
 
 Basic Start refernece for coding 
 https://www.pacificsimplicity.ca/blog/simple-read-configuration-file-struct-example
 
 Format :
-**************************************************************/
-//struct ConfigData 
-void config_parse(char Filename[MAXCOLSIZE]){
+*********************************************************************************************/
+struct ConfigData config_parse(char Filename[MAXCOLSIZE]){
 
 	int i=0 ;
 	FILE *filepointer;
 	ssize_t read_bytes,length;
-	struct ConfigData config;
+	//struct ConfigData config;
 	char readline[MAXBUFSIZE];
 	char (*split_attr)[MAXCOLSIZE];
 	char tempcopy[MAXCOLSIZE];
@@ -133,7 +138,7 @@ void config_parse(char Filename[MAXCOLSIZE]){
 	//FILE *filetoread = fopen(Filename,"r");
 	if ((filepointer=fopen(Filename,"r"))==NULL){//if File  not found 
 			printf("Configuration file not found Try Again \n");
-			perror("File not Found");
+			//perror("File not Found");
 			exit(-1);
 		}
 	else
@@ -143,8 +148,11 @@ void config_parse(char Filename[MAXCOLSIZE]){
 			readline[strlen(readline)-1] = '\0';
 			//check for comments 			
 			if (readline[0]=='#'){
-				DEBUG_PRINT("It is a comment");
+				DEBUG_PRINT("comment");
 			}
+			else if (readline[0]=='\n'){
+				DEBUG_PRINT("Blank Line ");
+			}	
 			else
 			{
 				DEBUG_PRINT("%s\n",readline);	
@@ -224,10 +232,11 @@ void config_parse(char Filename[MAXCOLSIZE]){
 							if(!(strncmp(split_attr[ConfigType],"KeepaliveTime",length))){
 
 								
-								DEBUG_PRINT("Found KeepaliveTime");
-								bzero(config.content_type,sizeof(config.content_type));
-								strcpy(config.content_type,split_attr[ConfigContent]);
-								strcpy(config.response_type,split_attr[ConfigFileType]);
+								
+								bzero(config.keep_alive_time,sizeof(config.keep_alive_time));
+								strcpy(config.keep_alive_time,split_attr[ConfigContent]);
+								DEBUG_PRINT("Found KeepaliveTime %s ",config.keep_alive_time);
+								
 							}
 							else
 							{
@@ -246,14 +255,6 @@ void config_parse(char Filename[MAXCOLSIZE]){
 		}	
 		if (split_attr!=NULL){
 
-			// Print the Configuration 
-			DEBUG_PRINT("Confiuration Obtain");
-			DEBUG_PRINT("Port %s",config.listen_port);
-			DEBUG_PRINT("Root %s",config.document_root);
-			DEBUG_PRINT("Index %s",config.directory_index);
-			DEBUG_PRINT("Type %s",config.content_type);
-			DEBUG_PRINT("KeepaliveTime %s",config.keep_alive_time);
-
 
 			//free alloaction of memory 
 			for(i=0;i<total_attr_commands;i++){
@@ -264,21 +265,15 @@ void config_parse(char Filename[MAXCOLSIZE]){
 		}
 		else{
 
-			DEBUG_PRINT("Configuration Could not ");
+			DEBUG_PRINT("Configuration Details could not be found ");
 
 		}
-
-
-
 		DEBUG_PRINT("AFter reading File ");
 		fclose (filepointer);
 		DEBUG_PRINT("Close File Pointer");
-
-
-
 	}
 
-//	return config;
+	return config;
 
 }
 
@@ -351,7 +346,8 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 	}
 
 	
-	if (sizeofip<maxattr || sizeofip<maxattr){
+	//if (sizeofip<maxattr || sizeofip>maxattr){
+	if (sizeofip>maxattr){
 		DEBUG_PRINT("unsuccessful split %d %d",sizeofip,maxattr);
 		return -1;
 	}	
@@ -362,7 +358,7 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 	}	
 		
 
-	return 0;	
+	return sizeofip;	
 
 	
 }
@@ -427,7 +423,8 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 		memset(path,0,sizeof(path));
 		
 		//**acquire root path ** left 
-		strcpy(path,ROOT);
+		//strcpy(path,ROOT);
+		strcpy(path,config.document_root);
 		DEBUG_PRINT("Path before request:%s",path);
 		DEBUG_PRINT("request URL:%s",request[HttpURL]);
 		
@@ -436,7 +433,9 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 		
 		//check if no path/default location 		
 		if(!(strncmp(request[HttpURL], "/\0", 2)))  {
-			strcat(path,"/index.html");			
+			//strcat(path,"/index.html");			
+			strcat(path,"/");			
+			strcat(path,config.directory_index);			
 		}
 		else{
 			//Concate root path with requested URL 
@@ -687,6 +686,19 @@ int main (int argc, char * argv[] ){
 	char request[MAXPACKSIZE];             //a request to store our received message
 	
 	int *mult_sock=NULL;//to alloacte the client socket descriptor
+	pthread_t client_thread;
+
+	//Configuration file before starting the Web Server 
+	DEBUG_PRINT("Reading the config file ");
+	config_parse("ws.conf");
+
+	// Print the Configuration 
+	DEBUG_PRINT("Confiuration Obtain");
+	DEBUG_PRINT("Port %s",config.listen_port);
+	DEBUG_PRINT("Root %s",config.document_root);
+	DEBUG_PRINT("Index %s",config.directory_index);
+	DEBUG_PRINT("Type %s",config.content_type);
+	DEBUG_PRINT("KeepaliveTime %s",config.keep_alive_time);
 
 
 	/******************
@@ -696,22 +708,9 @@ int main (int argc, char * argv[] ){
 	bzero(&server,sizeof(server));                    //zero the struct
 	server.sin_family = AF_INET;                   //address family
 	//server.sin_port = htons(atoi(argv[1]));        //htons() sets the port # to network byte order
-	server.sin_port = htons(SERV_PORT);        		//htons() sets the port # to network byte order
+	server.sin_port = htons(atoi(config.listen_port));        		//htons() sets the port # to network byte order
 	server.sin_addr.s_addr = INADDR_ANY;           //supplies the IP address of the local machine
 	remote_length = sizeof(struct sockaddr_in);    //size of client packet 
-	pthread_t client_thread;
-
-
-	//Configuration file before starting the Web Server 
-	DEBUG_PRINT("Reading the config file ");
-	config_parse("ws.conf");
-
-
-
-
-
-
-
 
 
 
