@@ -37,7 +37,7 @@ Last Edit : 10/10
 #define MAXPACKSIZE 200
 #define ERRORMSGSIZE 1000
 #define MAXCOMMANDSIZE 100
-
+#define MAXCONTENTSUPPORT 10
 
 
 
@@ -54,6 +54,9 @@ Last Edit : 10/10
                                 __LINE__, __FUNCTION__, ##args); } while (0)
 
 
+
+
+
 typedef char type2D[10][MAXCOMMANDSIZE];
 
 typedef enum HTTPFORMAT{
@@ -64,7 +67,22 @@ typedef enum HTTPFORMAT{
 						}HTTP_FM;// Resource format
 
 
+typedef enum CONFIGORMAT{
+							FmtExtra,//Format Extra Character
+							ConfigType,//Config Type 
+							ConfigContent,//Config Content
+							ConfigFileType//Config File type 
+						}CONFIG_FM;// Config File format
 
+
+struct ConfigData{
+		char *listen_port;
+		char *document_root;
+		char *directory_index;
+		char content_type[MAXCONTENTSUPPORT][MAXCOLSIZE];
+		char response_type[MAXCONTENTSUPPORT][MAXCOLSIZE];
+		char *keep_alive_time;
+};
 
 //typedef enum HTTPFORMAT{RM,RU,RV}HTTP_FM;
 
@@ -80,7 +98,121 @@ struct timeval timeout={0,100000};
 
 //fixed Root , take from configuration file 
 char * ROOT = "/home/chinmay/Desktop/5273/PA2/www";
+char *configfilename ="ws.conf";
 
+/*************************************************************
+//Parse a configutation file 
+//
+I/p : File name 
+
+Checks : 
+		2) Config File present or not
+		 Discard Commented out lines "#"
+ 	  
+o/p : Pointer to a structure of required data 
+
+Basic Start refernece for coding 
+https://www.pacificsimplicity.ca/blog/simple-read-configuration-file-struct-example
+
+Format :
+**************************************************************/
+//struct ConfigData 
+void config_parse(char Filename[MAXCOLSIZE]){
+
+	int i=0 ;
+	FILE *filepointer;
+	ssize_t read_bytes,length;
+	struct ConfigData config;
+	char readline[MAXBUFSIZE];
+	char (*split_attr)[MAXCOLSIZE];
+	int content_location=0,total_attr_commands=0;
+	
+	DEBUG_PRINT("In");
+	//Read File 
+	//FILE *filetoread = fopen(Filename,"r");
+	if ((filepointer=fopen(Filename,"r"))==NULL){//if File  not found 
+			printf("Configuration file not found Try Again \n");
+			perror("File not Found");
+			exit(-1);
+		}
+	else
+	{
+		while((fgets(readline,sizeof(readline),filepointer))!=NULL){			
+
+			readline[strlen(readline)-1] = '\0';
+			//check for comments 			
+			if (readline[0]=='#'){
+				DEBUG_PRINT("It is a comment");
+			}
+			else
+			{
+				DEBUG_PRINT("%s\n",readline);	
+				//parse and store file 
+
+				if ((split_attr=malloc(sizeof(split_attr)*MAXCOLSIZE))){	
+					total_attr_commands=0;
+					if((total_attr_commands=splitString(readline," ",split_attr,2))<0)
+					{
+						DEBUG_PRINT("Error in Split \n\r");
+						
+					}
+					else
+					{
+						DEBUG_PRINT("%d",total_attr_commands);
+						DEBUG_PRINT("Config Type %s",split_attr[ConfigType]);
+						//DEBUG_PRINT("Config Content %s",split_attr[ConfigContent]);
+						//DEBUG_PRINT("Config Content %s",split_attr[ConfigContent]);
+						
+
+						//Check for Listen Port 
+						if(!strcmp(split_attr[ConfigType],"ListenPort")){
+
+							bzero(config.listen_port,sizeof(config.listen_port));
+							DEBUG_PRINT("Found Listen Port");
+							strcpy(config.listen_port,split_attr[ConfigContent]);
+						}
+						////Check for Listen Port 
+						if(!strcmp(split_attr[ConfigType],"DocumentRoot")){
+
+							bzero(config.document_root,sizeof(config.document_root));
+							strcpy(config.document_root,split_attr[ConfigContent]);
+							DEBUG_PRINT("Found DocumentRoot");
+						}
+
+
+
+					}	
+						//free alloaction of memory 
+						for(i=0;i<total_attr_commands;i++){
+							free((*split_attr)[i]);
+						}
+						free(split_attr);//clear  the request recieved 
+						
+				}
+				else
+				{
+					DEBUG_PRINT("Cant Allocate Memory");
+				}	
+
+
+
+
+			}
+			
+		}	
+		DEBUG_PRINT("AFter reading File ");
+		/*
+		if(readline){
+			free(readline);
+		}
+		*/
+		fclose (filepointer);
+		DEBUG_PRINT("Close File Pointer");
+	}
+
+//	return config;
+
+}
 
 
 /*************************************************************
@@ -99,6 +231,9 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 	int sizeofip=1,i=1;
 	char *p=NULL;//token
 	char *temp_str = NULL;
+
+
+	DEBUG_PRINT("value split %d",sizeofip);
 	
 	if(splitip==NULL || delimiter==NULL){
 		printf("Error\n");
@@ -140,7 +275,7 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 		memset(splitop[sizeofip],0,sizeof(splitop[sizeofip]));
 		strncpy(splitop[sizeofip],p,strlen(p));
 		strcat(splitop[sizeofip],"\0");
-		//DEBUG_PRINT("%d %s\n",sizeofip,splitop[sizeofip]);
+		DEBUG_PRINT("%d %s\n",sizeofip,splitop[sizeofip]);
 		sizeofip++;
 
 		//get next token 
@@ -148,15 +283,21 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 		
 	}
 
-	if (sizeofip<maxattr)
+	
+	if (sizeofip<maxattr){
+		DEBUG_PRINT("successful split %d %d",sizeofip,maxattr);
+		return sizeofip;//Done split and return successful }
+	}	
+	else
 	{
-		DEBUG_PRINT("unsuccessful split");
+
+		DEBUG_PRINT("unsuccessful split %d %d",sizeofip,maxattr);
 		return -1;
-	}
+
+	}	
+		
 
 	
-
-	return sizeofip;//Done split and return successful 
 }
 
 int error_response(char *err_message,char Http_URL[MAXCOLSIZE],int sock,char Http_Version[MAXCOLSIZE],char reason[MAXCOLSIZE]){
@@ -492,6 +633,21 @@ int main (int argc, char * argv[] ){
 	server.sin_addr.s_addr = INADDR_ANY;           //supplies the IP address of the local machine
 	remote_length = sizeof(struct sockaddr_in);    //size of client packet 
 	pthread_t client_thread;
+
+
+	//Configuration file before starting the Web Server 
+	DEBUG_PRINT("Reading the config file ");
+	config_parse("ws.conf");
+
+
+
+
+
+
+
+
+
+
 	//Causes the system to create a generic socket of type TCP (strean)
 	if ((server_sock =socket(AF_INET,SOCK_STREAM,0)) < 0){
 		DEBUG_PRINT("unable to create tcp socket");
