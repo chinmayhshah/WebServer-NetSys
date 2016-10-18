@@ -76,12 +76,12 @@ typedef enum CONFIGORMAT{
 
 
 struct ConfigData{
-		char *listen_port;
-		char *document_root;
-		char *directory_index;
+		char listen_port[MAXCOLSIZE];
+		char document_root[MAXCOLSIZE];
+		char directory_index[MAXCOLSIZE];
 		char content_type[MAXCONTENTSUPPORT][MAXCOLSIZE];
 		char response_type[MAXCONTENTSUPPORT][MAXCOLSIZE];
-		char *keep_alive_time;
+		char keep_alive_time[MAXCOLSIZE];
 };
 
 //typedef enum HTTPFORMAT{RM,RU,RV}HTTP_FM;
@@ -125,6 +125,7 @@ void config_parse(char Filename[MAXCOLSIZE]){
 	struct ConfigData config;
 	char readline[MAXBUFSIZE];
 	char (*split_attr)[MAXCOLSIZE];
+	char tempcopy[MAXCOLSIZE];
 	int content_location=0,total_attr_commands=0;
 	
 	DEBUG_PRINT("In");
@@ -151,7 +152,7 @@ void config_parse(char Filename[MAXCOLSIZE]){
 
 				if ((split_attr=malloc(sizeof(split_attr)*MAXCOLSIZE))){	
 					total_attr_commands=0;
-					if((total_attr_commands=splitString(readline," ",split_attr,2))<0)
+					if((total_attr_commands=splitString(readline," ",split_attr,4))<0)
 					{
 						DEBUG_PRINT("Error in Split \n\r");
 						
@@ -160,54 +161,121 @@ void config_parse(char Filename[MAXCOLSIZE]){
 					{
 						DEBUG_PRINT("%d",total_attr_commands);
 						DEBUG_PRINT("Config Type %s",split_attr[ConfigType]);
-						//DEBUG_PRINT("Config Content %s",split_attr[ConfigContent]);
-						//DEBUG_PRINT("Config Content %s",split_attr[ConfigContent]);
-						
+						split_attr[ConfigFileType][sizeof(ConfigType)]='\0';
+						length=strlen(split_attr[ConfigType]);
+	
+						//strncpy(tempcopy,split_attr[ConfigType],length);
+						//DEBUG_PRINT("Copied%s",tempcopy);
+						//Check for Listen Port 			
+						if(split_attr[ConfigType]!=NULL)
+						{
+							////Check for Listen Port 
+							if(!(strncmp(split_attr[ConfigType],"ListenPort",length))){							
+								
+								bzero(config.listen_port,sizeof(config.document_root));
+								strcpy(config.listen_port,split_attr[ConfigContent]);
+								DEBUG_PRINT("Found Listen Port %s %s",split_attr[ConfigContent],config.listen_port);
+							}
+							else
+							{
+								DEBUG_PRINT("Listen Port not found ");
+							}
+														
+							////Check for Document Root
+							if(!(strncmp(split_attr[ConfigType],"DocumentRoot",length))){
+					
+								bzero(config.document_root,sizeof(config.document_root));
+								strcpy(config.document_root,split_attr[ConfigContent]);
+								DEBUG_PRINT("Found DocumentRoot %s %s",split_attr[ConfigContent],config.document_root);
+							}
+							else
+							{
+								DEBUG_PRINT("DocumentRoot not found ");
+							}
 
-						//Check for Listen Port 
-						if(!strcmp(split_attr[ConfigType],"ListenPort")){
+							////Check for Document Index
+							if(!(strncmp(split_attr[ConfigType],"DirectoryIndex",length))){
 
-							bzero(config.listen_port,sizeof(config.listen_port));
-							DEBUG_PRINT("Found Listen Port");
-							strcpy(config.listen_port,split_attr[ConfigContent]);
+								
+								//);
+								bzero(config.directory_index,sizeof(config.directory_index));
+								strcpy(config.directory_index,split_attr[ConfigContent]);
+								DEBUG_PRINT("Found DirectoryIndex %s %s",split_attr[ConfigContent],config.directory_index);
+							}
+							else
+							{
+								DEBUG_PRINT("DirectoryIndex not found ");
+							}
+
+
+							////Check for ContentType Index
+							if(!(strncmp(split_attr[ConfigType],"ContentType",length))){										
+								bzero(config.content_type,sizeof(config.content_type));
+								strcpy(config.content_type,split_attr[ConfigContent]);
+								strcpy(config.response_type,split_attr[ConfigFileType]);
+								DEBUG_PRINT("Found ContentType %s %s",split_attr[ConfigContent],config.content_type);
+							}
+							else
+							{
+								DEBUG_PRINT("ContentType not found ");
+							}
+
+							////Check for KeepaliveTime
+							if(!(strncmp(split_attr[ConfigType],"KeepaliveTime",length))){
+
+								
+								DEBUG_PRINT("Found KeepaliveTime");
+								bzero(config.content_type,sizeof(config.content_type));
+								strcpy(config.content_type,split_attr[ConfigContent]);
+								strcpy(config.response_type,split_attr[ConfigFileType]);
+							}
+							else
+							{
+								DEBUG_PRINT("KeepaliveTime not found ");
+							}
 						}
-						////Check for Listen Port 
-						if(!strcmp(split_attr[ConfigType],"DocumentRoot")){
-
-							bzero(config.document_root,sizeof(config.document_root));
-							strcpy(config.document_root,split_attr[ConfigContent]);
-							DEBUG_PRINT("Found DocumentRoot");
-						}
-
-
-
 					}	
-						//free alloaction of memory 
-						for(i=0;i<total_attr_commands;i++){
-							free((*split_attr)[i]);
-						}
-						free(split_attr);//clear  the request recieved 
-						
+					
 				}
 				else
 				{
 					DEBUG_PRINT("Cant Allocate Memory");
 				}	
-
-
-
-
 			}
 			
 		}	
-		DEBUG_PRINT("AFter reading File ");
-		/*
-		if(readline){
-			free(readline);
+		if (split_attr!=NULL){
+
+			// Print the Configuration 
+			DEBUG_PRINT("Confiuration Obtain");
+			DEBUG_PRINT("Port %s",config.listen_port);
+			DEBUG_PRINT("Root %s",config.document_root);
+			DEBUG_PRINT("Index %s",config.directory_index);
+			DEBUG_PRINT("Type %s",config.content_type);
+			DEBUG_PRINT("KeepaliveTime %s",config.keep_alive_time);
+
+
+			//free alloaction of memory 
+			for(i=0;i<total_attr_commands;i++){
+				free((*split_attr)[i]);
+			}
+			free(split_attr);//clear  the request recieved 
+
 		}
-		*/
+		else{
+
+			DEBUG_PRINT("Configuration Could not ");
+
+		}
+
+
+
+		DEBUG_PRINT("AFter reading File ");
 		fclose (filepointer);
 		DEBUG_PRINT("Close File Pointer");
+
+
+
 	}
 
 //	return config;
@@ -275,7 +343,6 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 		memset(splitop[sizeofip],0,sizeof(splitop[sizeofip]));
 		strncpy(splitop[sizeofip],p,strlen(p));
 		strcat(splitop[sizeofip],"\0");
-		DEBUG_PRINT("%d %s\n",sizeofip,splitop[sizeofip]);
 		sizeofip++;
 
 		//get next token 
@@ -284,18 +351,18 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 	}
 
 	
-	if (sizeofip<maxattr){
-		DEBUG_PRINT("successful split %d %d",sizeofip,maxattr);
-		return sizeofip;//Done split and return successful }
-	}	
-	else
-	{
-
+	if (sizeofip<maxattr || sizeofip<maxattr){
 		DEBUG_PRINT("unsuccessful split %d %d",sizeofip,maxattr);
 		return -1;
-
+	}	
+	else
+	{	
+		//DEBUG_PRINT("successful split %d %d",sizeofip,maxattr);
+		return sizeofip;//Done split and return successful }
 	}	
 		
+
+	return 0;	
 
 	
 }
