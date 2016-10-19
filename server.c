@@ -67,6 +67,8 @@ typedef enum HTTPFORMAT{
 						}HTTP_FM;// Resource format
 
 
+//For configuration File
+
 typedef enum CONFIGORMAT{
 							FmtExtra,//Format Extra Character
 							ConfigType,//Config Type 
@@ -87,7 +89,7 @@ struct ConfigData{
 
 
 struct ConfigData config;
-
+int maxtypesupported=0;
 //typedef enum HTTPFORMAT{RM,RU,RV}HTTP_FM;
 
 
@@ -101,7 +103,7 @@ int nbytes;                        //number of bytes we receive in our message
 struct timeval timeout={0,100000};     
 
 //fixed Root , take from configuration file 
-char * ROOT = "/home/chinmay/Desktop/5273/PA2/www";
+//char * ROOT = "/home/chinmay/Desktop/5273/PA2/www";
 char *configfilename ="ws.conf";
 
 /*******************************************************************************************
@@ -122,7 +124,7 @@ https://www.pacificsimplicity.ca/blog/simple-read-configuration-file-struct-exam
 
 Format :
 *********************************************************************************************/
-struct ConfigData config_parse(char Filename[MAXCOLSIZE]){
+int config_parse(char Filename[MAXCOLSIZE]){
 
 	int i=0 ;
 	FILE *filepointer;
@@ -169,7 +171,7 @@ struct ConfigData config_parse(char Filename[MAXCOLSIZE]){
 					{
 						DEBUG_PRINT("%d",total_attr_commands);
 						DEBUG_PRINT("Config Type %s",split_attr[ConfigType]);
-						split_attr[ConfigFileType][sizeof(ConfigType)]='\0';
+						//split_attr[ConfigFileType][sizeof(ConfigType)]='\0';
 						length=strlen(split_attr[ConfigType]);
 	
 						//strncpy(tempcopy,split_attr[ConfigType],length);
@@ -218,10 +220,13 @@ struct ConfigData config_parse(char Filename[MAXCOLSIZE]){
 
 							////Check for ContentType Index
 							if(!(strncmp(split_attr[ConfigType],"ContentType",length))){										
-								bzero(config.content_type,sizeof(config.content_type));
-								strcpy(config.content_type,split_attr[ConfigContent]);
-								strcpy(config.response_type,split_attr[ConfigFileType]);
-								DEBUG_PRINT("Found ContentType %s %s",split_attr[ConfigContent],config.content_type);
+								bzero(config.content_type[content_location],sizeof(config.content_type[content_location]));
+								bzero(config.response_type[content_location],sizeof(config.response_type[content_location]));
+								strcpy(config.content_type[content_location],split_attr[ConfigContent]);
+								strncpy(config.response_type[content_location],split_attr[ConfigFileType],sizeof(config.response_type[content_location]));
+								content_location ++;
+								DEBUG_PRINT("Found ContentType %s %s %d",split_attr[ConfigContent],split_attr[ConfigFileType],content_location);
+								DEBUG_PRINT("Stored ContentType %s %s %d",split_attr[ConfigContent],split_attr[ConfigFileType],content_location);
 							}
 							else
 							{
@@ -229,10 +234,7 @@ struct ConfigData config_parse(char Filename[MAXCOLSIZE]){
 							}
 
 							////Check for KeepaliveTime
-							if(!(strncmp(split_attr[ConfigType],"KeepaliveTime",length))){
-
-								
-								
+							if(!(strncmp(split_attr[ConfigType],"KeepaliveTime",length))){											
 								bzero(config.keep_alive_time,sizeof(config.keep_alive_time));
 								strcpy(config.keep_alive_time,split_attr[ConfigContent]);
 								DEBUG_PRINT("Found KeepaliveTime %s ",config.keep_alive_time);
@@ -273,7 +275,7 @@ struct ConfigData config_parse(char Filename[MAXCOLSIZE]){
 		DEBUG_PRINT("Close File Pointer");
 	}
 
-	return config;
+	return (content_location);//return total content type 
 
 }
 
@@ -338,6 +340,7 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 		memset(splitop[sizeofip],0,sizeof(splitop[sizeofip]));
 		strncpy(splitop[sizeofip],p,strlen(p));
 		strcat(splitop[sizeofip],"\0");
+		DEBUG_PRINT	("%d : %s",sizeofip,splitop[sizeofip]);
 		sizeofip++;
 
 		//get next token 
@@ -390,7 +393,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 		char sendData[MAXBUFSIZE];
 		struct stat *file_stats=NULL;
 		char file_type[MAXCOLSIZE];
-		int total_attr_commands=0,i=0;
+		int total_attr_commands=0,i=0,contentimpl=0;
 		char *p=NULL;
 		char *lastptr=NULL;
 		//		
@@ -425,6 +428,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 		//**acquire root path ** left 
 		//strcpy(path,ROOT);
 		strcpy(path,config.document_root);
+
 		DEBUG_PRINT("Path before request:%s",path);
 		DEBUG_PRINT("request URL:%s",request[HttpURL]);
 		
@@ -488,56 +492,37 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 				}
 				else
 				{
-					DEBUG_PRINT("COuld not find '.' ");
+					
+					perror("File not Found");
+					DEBUG_PRINT("Could not find '.' ");error_response("404 Not Found",request[HttpURL],thread_sock,request[HttpVersion],"URL Does not Exist");
+					//return -1;
 				}
 
-				if(!strcmp(file_type,"html")){
-					//strcpy(response_message,"Content-Type: ");
-					//strcat(response_message,file_type[1]); 
-					sprintf(response_message,"Content-Type: text/html\r\n");
-				}
-				else if (!strcmp(file_type,"png")){
-					sprintf(response_message,"Content-Type: image/png\r\n");
-
-				}
-				else if (!strcmp(file_type,"jpg")){
-					sprintf(response_message,"Content-Type: image/jpeg\r\n");
-
-				}
-				else if (!strcmp(file_type,"gif")){
-					sprintf(response_message,"Content-Type: image/gif\r\n");
-
-				}
-				else if (!strcmp(file_type,"jpeg")){
-					sprintf(response_message,"Content-Type: image/jpeg\r\n");
-
-				}
-				else if (!strcmp(file_type,"htm")){
-					sprintf(response_message,"Content-Type: text/html\r\n");
-
-				}
-				else if (!strcmp(file_type,"txt")){
-					sprintf(response_message,"Content-Type: text/plain\r\n");
-
-				}
-				else if (!strcmp(file_type,"css")){
-					sprintf(response_message,"Content-Type: text/css\r\n");
-
-				}
-				else if (!strcmp(file_type,"js")){
-					sprintf(response_message,"Content-Type: text/javascript\r\n");
-
-				}
-				else
+				//Search for Content type and assign Type supported 
+				contentimpl = 0;//Initial value not found 
+				for (i=0;i<maxtypesupported;i++)
 				{
-					//sprintf(response_message,"Content-Type:	application/octet-stream\r\n");
-					//need to add type 
+					if (!strcmp(file_type,&config.content_type[i][1])){
+						printf("Found Content Match");
+						sprintf(response_message,"%s\r\n",config.response_type[i]);
+						contentimpl = 1;
+						break;
+					}
+					else{
+						contentimpl = 0;
+					}
+
+				}
+
+				//DEBUG_PRINT("%d %s %s",i,config.content_type[i],config.response_type[i]);
+				if (!contentimpl)
+				{
 					error_response("501 Not Implemented",file_type,thread_sock,request[HttpVersion],"File type Not Implemented");
-					DEBUG_PRINT("File type is not implemented");
+					printf("File type is not implemented");
 					return -1;
 				}
 
-
+	
 				printf("%s",response_message);
 				write(thread_sock,response_message,strlen(response_message));			
 
@@ -687,20 +672,28 @@ int main (int argc, char * argv[] ){
 	
 	int *mult_sock=NULL;//to alloacte the client socket descriptor
 	pthread_t client_thread;
+	int i=0;
 
 	//Configuration file before starting the Web Server 
 	DEBUG_PRINT("Reading the config file ");
-	config_parse("ws.conf");
+	maxtypesupported=config_parse("ws.conf");
 
 	// Print the Configuration 
 	DEBUG_PRINT("Confiuration Obtain");
-	DEBUG_PRINT("Port %s",config.listen_port);
-	DEBUG_PRINT("Root %s",config.document_root);
-	DEBUG_PRINT("Index %s",config.directory_index);
-	DEBUG_PRINT("Type %s",config.content_type);
-	DEBUG_PRINT("KeepaliveTime %s",config.keep_alive_time);
-
-
+	
+	
+	if (!maxtypesupported)
+	{
+		printf("Zero File Type Supported !! Check Config File\n");
+		exit(-1);
+	}
+	else
+	{	DEBUG_PRINT("Type Supported");
+		for (i=0;i<maxtypesupported;i++)
+		{
+			DEBUG_PRINT("%d %s %s",i,config.content_type[i],config.response_type[i]);
+		}
+	}	
 	/******************
 	  This code populates the sockaddr_in struct with
 	  the information about our socket
@@ -708,12 +701,48 @@ int main (int argc, char * argv[] ){
 	bzero(&server,sizeof(server));                    //zero the struct
 	server.sin_family = AF_INET;                   //address family
 	//server.sin_port = htons(atoi(argv[1]));        //htons() sets the port # to network byte order
-	server.sin_port = htons(atoi(config.listen_port));        		//htons() sets the port # to network byte order
+	if (strcmp(config.listen_port,"")){
+		DEBUG_PRINT("Port %s",config.listen_port);
+		if(atoi(config.listen_port) <=1024){
+			printf("\nPort Number less than 1024!! Check configuration file\n");
+			exit(-1);
+		}
+		else
+		{
+			server.sin_port = htons(atoi(config.listen_port));        		//htons() sets the port # to network byte order
+		}	
+		
+	}
+	else
+	{	
+		printf("\nPort Number not found !! Check configuration file");
+		exit(-1);
+	}
+	
 	server.sin_addr.s_addr = INADDR_ANY;           //supplies the IP address of the local machine
 	remote_length = sizeof(struct sockaddr_in);    //size of client packet 
 
 
+	if (strcmp(config.document_root,"")){
+		DEBUG_PRINT("Root %s",config.document_root);
+	}
+	else
+	{	
+		printf("\nRoot Directory not found !! Check configuration file\n");
+		exit(-1);
+	}
 
+	if (strcmp(config.directory_index,"")){
+		DEBUG_PRINT("Index %s",config.directory_index);
+	}
+	else
+	{	
+		printf("Default File not found !! Check configuration file\n");
+		//exit(-1);
+	}
+	//Keepalive for pipelining 
+	DEBUG_PRINT("KeepaliveTime %s",config.keep_alive_time);
+	
 	//Causes the system to create a generic socket of type TCP (strean)
 	if ((server_sock =socket(AF_INET,SOCK_STREAM,0)) < 0){
 		DEBUG_PRINT("unable to create tcp socket");
