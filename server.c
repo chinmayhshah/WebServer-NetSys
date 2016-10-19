@@ -406,8 +406,10 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 		// For POST
 		char (*user)[MAXCOMMANDSIZE];
 		char comp[MAXCOMMANDSIZE];
+		//char (*comp)[MAXCOMMANDSIZE];
 		char *ret=NULL;
 		int user_attr,comp_attr;
+		int j=0;
 
 
 
@@ -600,19 +602,22 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 						else
 						{
 							DEBUG_PRINT("User first part %s:%s:%s",user[1],user[2],user[3]);
+							j=0;
+							while(user[2][j]!='&' && j<MAXCOMMANDSIZE){
+								comp[j]=user[2][j];
+								j++;
+							}
+							if(j>MAXCOMMANDSIZE)
+							{
+								printf("Cant Find &");
+							}
+							else
+							{	
+								sprintf(response_message,"<html>\n\r<head>\r\n<h1>POST Data for test</h1>\n\r</head>\n\r<body>\n\r<pre>\n\r %s %s </pre>\n\r</body>\n</html>\n\r",comp,user[3]);
+								send(thread_sock,response_message,sizeof(response_message),0);		
+							}	
+							
 						}	
-
-						if(ret =strrchr(user[2], '&'))
-						{
-							//*(ret)
-							strncpy(comp,user[2],((*ret)-(*user)[2]));
-						}
-						else
-						{
-							DEBUG_PRINT("Could not find ");	
-						}
-						sprintf(response_message,"<html>\n\r<head>\r\n<h1>POST Data for test</h1>\n\r</head>\n\r<body>\n\r<pre>\n\r %s %s </pre>\n\r</body>\n</html>\n\r",user[2],user[3]);
-						send(thread_sock,response_message,sizeof(response_message),0);		
 						free(user);				
 						
 					}
