@@ -33,8 +33,8 @@ Last Edit : 10/10
 #define HTTPREQ 	30
 
 
-#define MAXBUFSIZE 600
-#define MAXPACKSIZE 200
+#define MAXBUFSIZE 60000
+#define MAXPACKSIZE 1000
 #define ERRORMSGSIZE 1000
 #define MAXCOMMANDSIZE 100
 #define MAXCONTENTSUPPORT 10
@@ -66,10 +66,16 @@ typedef enum HTTPFORMAT{
 							HttpVersion //Resource Version 
 						}HTTP_FM;// Resource format
 
+//HTTP Mehthod supported 
+typedef enum HTTPMETHOD{
+							HTTP_GET,//GET
+							HTTP_POST
+
+						}HTTP_METHOD;
 
 //For configuration File
 
-typedef enum CONFIGORMAT{
+typedef enum CONFIGFORMAT{
 							FmtExtra,//Format Extra Character
 							ConfigType,//Config Type 
 							ConfigContent,//Config Content
@@ -152,7 +158,7 @@ int config_parse(char Filename[MAXCOLSIZE]){
 			if (readline[0]=='#'){
 				DEBUG_PRINT("comment");
 			}
-			else if (readline[0]=='\n'){
+			else if (!strcmp(readline,"\n\r")){
 				DEBUG_PRINT("Blank Line ");
 			}	
 			else
@@ -309,7 +315,7 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 	p=strtok(splitip,delimiter);//first token string 
 	
 	//Check other token
-	while(p!=NULL && p!="\n" && sizeofip<maxattr )
+	while(p!=NULL && p!='\n' && sizeofip<maxattr )
 	{
 		
 		
@@ -350,7 +356,7 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 
 	
 	//if (sizeofip<maxattr || sizeofip>maxattr){
-	if (sizeofip>maxattr){
+	if (sizeofip>maxattr+1){
 		DEBUG_PRINT("unsuccessful split %d %d",sizeofip,maxattr);
 		return -1;
 	}	
@@ -375,7 +381,7 @@ int error_response(char *err_message,char Http_URL[MAXCOLSIZE],int sock,char Htt
 	
 	DEBUG_PRINT("%s",err_message);
 	
-	sprintf(error_message,"%s %s\r\n\n<head>\r\n<title>%s</title>\n\r</head>\n\r<body>\n\r<h1>%s</h1>\n\r<b>Reason :</b>	<font color=\"red\"> %s :<font color=\"blue\">%s\n\r</body>\n\r</html>\n\r",Http_Version, err_message,err_message,err_message,reason,Http_URL);
+	sprintf(error_message,"%s %s\r<html>\n\n<head>\r\n<title>%s</title>\n\r</head>\n\r<body>\n\r<h1>%s</h1>\n\r<b>Reason :</b>	<font color=\"red\"> %s :<font color=\"blue\">%s\n\r</body>\n\r</html>\n\r",Http_Version, err_message,err_message,err_message,reason,Http_URL);
 	
 	DEBUG_PRINT("%s",error_message);
 	
@@ -384,7 +390,7 @@ int error_response(char *err_message,char Http_URL[MAXCOLSIZE],int sock,char Htt
 	return 0;
 }
 
-int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
+int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_data){
 
 		char response_message[MAXBUFSIZE];//store message from client// 
 		char path[MAXPACKSIZE],copypath[MAXPACKSIZE];
@@ -396,16 +402,34 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 		int total_attr_commands=0,i=0,contentimpl=0;
 		char *p=NULL;
 		char *lastptr=NULL;
+		HTTP_METHOD method;
+		// For POST
+		char (*user)[MAXCOMMANDSIZE];
+		char comp[MAXCOMMANDSIZE];
+		char *ret=NULL;
+		int user_attr,comp_attr;
+
+
+
+
+
 		//		
 		//check for Method
 		if(!strcmp(request[HttpMethod],"GET")){//if first element 
 			DEBUG_PRINT("GET Method implemented");
+			method =HTTP_GET;
 		}
+		else if (!strcmp(request[HttpMethod],"POST")){//if first element 
+			DEBUG_PRINT("POST Method implemented");
+			method =HTTP_POST;
+		}	
 		else{
 			error_response("400 Bad Request",request[HttpURL],thread_sock,request[HttpVersion],"Invalid Method");
 			DEBUG_PRINT("Method isn't implemented");
 			return -1;
 		}	
+
+
 		//check for version 
 		if (!strncmp(request[HttpVersion],"HTTP/1.1",8)){//if first element 
 			DEBUG_PRINT("Got HTTP 1.1");
@@ -464,7 +488,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 			memset(response_message,0,strlen(response_message));
 			
 			//send success message
-			memset(response_message,0,strlen(response_message));
+			
 			strcpy(response_message,"HTTP/1.1 200 OK\r\n");
 			printf("%s",response_message);
 			write(thread_sock,response_message,strlen(response_message));		
@@ -481,7 +505,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 				//p=strtok(NULL,".");
 				//strncpy(file_type[1],p,strlen(p));
 				//DEBUG_PRINT("type %s",file_type[1]);
-				DEBUG_PRINT("path seached%s",path);
+				DEBUG_PRINT("path searched%s",path);
 				lastptr = strrchr(path,'.');
 				if(lastptr){
 					DEBUG_PRINT("last occurence %s",lastptr);
@@ -522,6 +546,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 					return -1;
 				}
 
+				
 	
 				printf("%s",response_message);
 				write(thread_sock,response_message,strlen(response_message));			
@@ -555,7 +580,59 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock){
 			
 			memset(sendData,0,sizeof(sendData));
 			//send data 
+			//Incoporate addition for POST Method
+			if (method == HTTP_POST){
+				//printf("POST  changes incoporated \n");
+				printf("Data from Client%s\n",request_data);
+				
+				ret = strstr(request_data,"user");
+				//user=Chinmay&comp=Shah
+				if(ret){
+					DEBUG_PRINT("String %s",ret);
+					//find the user 
 
+					if ((user=malloc(sizeof(user)*MAXCOMMANDSIZE))){	
+						user_attr=0;
+						if((user_attr=splitString(ret,"=",user,4))<0)
+						{
+							DEBUG_PRINT("Could not split");	
+						}
+						else
+						{
+							DEBUG_PRINT("User first part %s:%s:%s",user[1],user[2],user[3]);
+						}	
+
+						if(ret =strrchr(user[2], '&'))
+						{
+							//*(ret)
+							strncpy(comp,user[2],((*ret)-(*user)[2]));
+						}
+						else
+						{
+							DEBUG_PRINT("Could not find ");	
+						}
+						sprintf(response_message,"<html>\n\r<head>\r\n<h1>POST Data for test</h1>\n\r</head>\n\r<body>\n\r<pre>\n\r %s %s </pre>\n\r</body>\n</html>\n\r",user[2],user[3]);
+						send(thread_sock,response_message,sizeof(response_message),0);		
+						free(user);				
+						
+					}
+					else
+					{
+						DEBUG_PRINT("Unable to alloacte");
+					}
+				}	
+				else
+				{
+					DEBUG_PRINT("Didnt find user");
+				}	
+				
+				//return 0;
+			}
+			else{
+				DEBUG_PRINT("No changes incoporated ");
+			}
+
+			printf("\nPath%s\n",path );
 			while((send_bytes=read(filedesc,sendData,MAXBUFSIZE))>0){
 				DEBUG_PRINT("%s\n",sendData); 
 				total_size += send_bytes;
@@ -586,6 +663,7 @@ void *client_connections(void *client_sock_id)
 	int thread_sock = (int*)(client_sock_id);
 	ssize_t read_bytes=0;
 	char message_client[MAXPACKSIZE];//store message from client 
+	char message_bkp[MAXPACKSIZE];//store message from client 
 	char (*split_attr)[MAXCOLSIZE];
 	DEBUG_PRINT("passed Client connection %d\n",(int)thread_sock);
 
@@ -596,8 +674,8 @@ void *client_connections(void *client_sock_id)
 		// Recieve the message from client  and reurn back to client 
 		if((read_bytes =recv(thread_sock,message_client,MAXPACKSIZE,0))>0){
 
-			DEBUG_PRINT("request from client %s\n",message_client );
-			
+			//printf("request from client %s\n",message_client );
+			strcpy(message_bkp,message_client);//backup of orginal message 
 			DEBUG_PRINT("Message length%d\n",(int)strlen(message_client) );
 			
 			if ((split_attr=malloc(sizeof(split_attr)*MAXCOLSIZE))){	
@@ -627,8 +705,9 @@ void *client_connections(void *client_sock_id)
 					DEBUG_PRINT("%d %s\n",i,split_attr[i]);
 				}
 				
+				printf("in client connections%s\n",message_bkp);
 				
-				responsetoClient(split_attr,thread_sock);
+				responsetoClient(split_attr,thread_sock,message_bkp);
 							
 				//free alloaction of memory 
 				for(i=0;i<total_attr_commands;i++){
@@ -681,7 +760,7 @@ int main (int argc, char * argv[] ){
 	// Print the Configuration 
 	DEBUG_PRINT("Confiuration Obtain");
 	
-	
+	//Check for file support available or not 
 	if (!maxtypesupported)
 	{
 		printf("Zero File Type Supported !! Check Config File\n");
@@ -701,6 +780,9 @@ int main (int argc, char * argv[] ){
 	bzero(&server,sizeof(server));                    //zero the struct
 	server.sin_family = AF_INET;                   //address family
 	//server.sin_port = htons(atoi(argv[1]));        //htons() sets the port # to network byte order
+
+
+	//Check if Port is present or not 
 	if (strcmp(config.listen_port,"")){
 		DEBUG_PRINT("Port %s",config.listen_port);
 		if(atoi(config.listen_port) <=1024){
@@ -722,7 +804,7 @@ int main (int argc, char * argv[] ){
 	server.sin_addr.s_addr = INADDR_ANY;           //supplies the IP address of the local machine
 	remote_length = sizeof(struct sockaddr_in);    //size of client packet 
 
-
+	//check if document root directory present 
 	if (strcmp(config.document_root,"")){
 		DEBUG_PRINT("Root %s",config.document_root);
 	}
@@ -740,6 +822,7 @@ int main (int argc, char * argv[] ){
 		printf("Default File not found !! Check configuration file\n");
 		//exit(-1);
 	}
+
 	//Keepalive for pipelining 
 	DEBUG_PRINT("KeepaliveTime %s",config.keep_alive_time);
 	
@@ -754,7 +837,7 @@ int main (int argc, char * argv[] ){
 	 ******************/
 	if (bind(server_sock, (struct sockaddr *)&server, sizeof(server)) < 0){
 		close(server_sock);
-		DEBUG_PRINT("unable to bind socket\n");
+		printf("unable to bind socket\n");
 		exit(-1);
 	}
 	//
