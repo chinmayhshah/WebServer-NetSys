@@ -41,7 +41,7 @@ Last Edit : 10/10
 
 
 
-#define DEBUGLEVEL
+//#define DEBUGLEVEL
 
 #ifdef DEBUGLEVEL
 	#define DEBUG 1
@@ -447,7 +447,32 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 			DEBUG_PRINT("Method isn't implemented");
 			return -1;
 		}		
+			
+		DEBUG_PRINT("Check for URL");			
 		
+		ret = strstr(request[HttpURL],"\\");//
+		if(ret)
+		{	
+			printf("BAD URL");			
+			error_response("400 Bad Request",request[HttpURL],thread_sock,request[HttpVersion],"Invalid HTTP-URL");
+			return -1;
+		}
+		else
+		{	
+		DEBUG_PRINT("Cant find ! Good URL");
+
+		}		
+
+
+
+
+
+
+
+
+
+
+
 		//read the defaut index file 
 		memset(path,0,sizeof(path));
 		
@@ -492,7 +517,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 			//send success message
 			
 			strcpy(response_message,"HTTP/1.1 200 OK\r\n");
-			printf("%s",response_message);
+			//printf("%s",response_message);
 			write(thread_sock,response_message,strlen(response_message));		
 			//DEBUG_PRINT("%s",response_message);
 
@@ -529,7 +554,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 				for (i=0;i<maxtypesupported;i++)
 				{
 					if (!strcmp(file_type,&config.content_type[i][1])){
-						printf("Found Content Match");
+						//printf("Found Content Match");
 						sprintf(response_message,"%s\r\n",config.response_type[i]);
 						contentimpl = 1;
 						break;
@@ -550,7 +575,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 
 				
 	
-				printf("%s",response_message);
+				//printf("%s",response_message);
 				write(thread_sock,response_message,strlen(response_message));			
 
 			}
@@ -570,7 +595,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 			//DEBUG_PRINT("File size %d",filesize);
 			memset(response_message,0,strlen(response_message));
 			sprintf(response_message,"Content-Length: %d\r\n\n",(int)filesize);					
-			printf("%s",response_message);
+			//printf("%s",response_message);
 			write(thread_sock,response_message,strlen(response_message));		
 
 			DEBUG_PRINT("%s",response_message);
@@ -585,7 +610,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 			//Incoporate addition for POST Method
 			if (method == HTTP_POST){
 				//printf("POST  changes incoporated \n");
-				printf("Data from Client%s\n",request_data);
+				//printf("Data from Client%s\n",request_data);
 				
 				ret = strstr(request_data,"user");
 				//user=Chinmay&comp=Shah
@@ -637,7 +662,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 				DEBUG_PRINT("No changes incoporated ");
 			}
 
-			printf("\nPath%s\n",path );
+			//printf("\nPath%s\n",path );
 			while((send_bytes=read(filedesc,sendData,MAXBUFSIZE))>0){
 				DEBUG_PRINT("%s\n",sendData); 
 				total_size += send_bytes;
@@ -647,7 +672,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 			DEBUG_PRINT("Total size read %d",(int)total_size);
 			memset(response_message,0,strlen(response_message));
 			strcpy(response_message,"\nCompleted\r\n");
-			printf("%s",response_message);
+			//printf("%s",response_message);
 			//write(thread_sock,response_message,strlen(response_message));		
 
 			close(filedesc);//close the file opened 
@@ -710,7 +735,7 @@ void *client_connections(void *client_sock_id)
 					DEBUG_PRINT("%d %s\n",i,split_attr[i]);
 				}
 				
-				printf("in client connections%s\n",message_bkp);
+				//printf("in client connections%s\n",message_bkp);
 				
 				responsetoClient(split_attr,thread_sock,message_bkp);
 							

@@ -10,14 +10,11 @@ CDEFS =
 CFLAGS= -o
 LDFLAGS= -lcrypto -lssl -lpthread
 
-PRODUCT= server client
+PRODUCT= server
 
 all: $(PRODUCT)
 	
 server: server.c
-		$(CC) $(CFLAGS) $@ $^ $(LDFLAGS)
-
-client: client.c
 		$(CC) $(CFLAGS) $@ $^ $(LDFLAGS)
 
 clean:
