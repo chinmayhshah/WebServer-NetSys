@@ -39,7 +39,7 @@ Last Edit : 10/10
 #define MAXCOMMANDSIZE 100
 #define MAXCONTENTSUPPORT 10
 
-
+//#define ActivateAlive
 
 #define DEBUGLEVEL
 
@@ -64,6 +64,8 @@ typedef enum HTTPFORMAT{
 							HttpMethod,//Resource Method
 							HttpURL,// Resource URL
 							HttpVersion //Resource Version 
+							//Connection ,  // Connection -1 - KeepAlive 
+										//   Connection - 0 - Timeout directly 	
 						}HTTP_FM;// Resource format
 
 //HTTP Mehthod supported 
@@ -95,6 +97,8 @@ struct ConfigData{
 
 
 struct ConfigData config;
+
+
 int maxtypesupported=0;
 //typedef enum HTTPFORMAT{RM,RU,RV}HTTP_FM;
 
@@ -244,7 +248,7 @@ int config_parse(char Filename[MAXCOLSIZE]){
 								bzero(config.keep_alive_time,sizeof(config.keep_alive_time));
 								strcpy(config.keep_alive_time,split_attr[ConfigContent]);
 								DEBUG_PRINT("Found KeepaliveTime %s ",config.keep_alive_time);
-								
+								//asd
 							}
 							else
 							{
@@ -307,7 +311,7 @@ int splitString(char *splitip,char *delimiter,char (*splitop)[MAXCOLSIZE],int ma
 	DEBUG_PRINT("value split %d",sizeofip);
 	
 	if(splitip==NULL || delimiter==NULL){
-		printf("Error\n");
+		printf("Error in split\n");
 		return -1;//return -1 on error 
 	}
 	
@@ -390,7 +394,7 @@ int error_response(char *err_message,char Http_URL[MAXCOLSIZE],int sock,char Htt
 	return 0;
 }
 
-int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_data){
+int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_data,int alive){
 
 		char response_message[MAXBUFSIZE];//store message from client// 
 		char path[MAXPACKSIZE],copypath[MAXPACKSIZE];
@@ -407,27 +411,24 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 		char (*user)[MAXCOMMANDSIZE];
 		char comp[MAXCOMMANDSIZE];
 		//char (*comp)[MAXCOMMANDSIZE];
-		char *ret=NULL;
+		char *ret=NULL;//*checkURL=NULL;
 		int user_attr,comp_attr;
 		int j=0;
-
-
-
-
-
 		//		
 		//check for Method
 		if(!strcmp(request[HttpMethod],"GET")){//if first element 
 			DEBUG_PRINT("GET Method implemented");
 			method =HTTP_GET;
 		}
+		
 		else if (!strcmp(request[HttpMethod],"POST")){//if first element 
 			DEBUG_PRINT("POST Method implemented");
 			method =HTTP_POST;
-		}	
+		}
+
 		else{
 			error_response("400 Bad Request",request[HttpURL],thread_sock,request[HttpVersion],"Invalid Method");
-			DEBUG_PRINT("Method isn't implemented");
+			printf("Method isn't implemented");
 			return -1;
 		}	
 
@@ -444,10 +445,25 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 		else
 		{
 			error_response("400 Bad Request",request[HttpURL],thread_sock,request[HttpVersion],"Invalid HTTP-Version");
-			DEBUG_PRINT("Method isn't implemented");
+			printf("Method isn't implemented");
 			return -1;
 		}		
 		
+		
+		DEBUG_PRINT("Check for URL");			
+		
+		ret = strstr(request[HttpURL],"\\");//
+		if(ret)
+		{	
+			printf("BAD URL");			
+			error_response("400 Bad Request",request[HttpURL],thread_sock,request[HttpVersion],"Invalid HTTP-URL");
+			return -1;
+		}
+		else
+		{	
+		DEBUG_PRINT("Cant find ! Good URL");
+
+		}	
 		//read the defaut index file 
 		memset(path,0,sizeof(path));
 		
@@ -486,15 +502,48 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 		
 		else
 		{
-			//send OK status 
-			memset(response_message,0,strlen(response_message));
 			
 			//send success message
-			
+			//sprintf(response_message,"Test: %d\r\n",(int)filesize);
+			//write(thread_sock,response_message,strlen(response_message));		
+			//DEBUG_PRINT("%s",response_message);
+			//send OK status 
+			memset(response_message,0,strlen(response_message));
 			strcpy(response_message,"HTTP/1.1 200 OK\r\n");
-			printf("%s",response_message);
+			DEBUG_PRINT("%s",response_message);
 			write(thread_sock,response_message,strlen(response_message));		
 			//DEBUG_PRINT("%s",response_message);
+
+			
+			//for content lenght 
+			file_stats = malloc(sizeof(struct stat));
+			memset(file_stats,0,sizeof(file_stats));
+			stat(path, file_stats);
+			filesize = file_stats->st_size;
+			//DEBUG_PRINT("File size %d",filesize);
+			memset(response_message,0,strlen(response_message));
+			sprintf(response_message,"Content-Length: %d\r\n",(int)filesize);					
+			DEBUG_PRINT("%s",response_message);
+			write(thread_sock,response_message,strlen(response_message));		
+
+			//DEBUG_PRINT("%s",response_message);
+
+			bzero(file_stats,sizeof(bzero));
+			free(file_stats);
+			if(alive){
+				memset(response_message,0,strlen(response_message));
+				sprintf(response_message,"Connection: keep-alive\r\n");					
+				DEBUG_PRINT("%s",response_message);
+				write(thread_sock,response_message,strlen(response_message));	
+			}
+			else
+			{
+				memset(response_message,0,strlen(response_message));
+				sprintf(response_message,"Connection: Close\r\n");					
+				DEBUG_PRINT("%s",response_message);
+				write(thread_sock,response_message,strlen(response_message));		
+			}	
+
 
 			//for content type 
 			memset(response_message,0,strlen(response_message));
@@ -520,7 +569,8 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 				{
 					
 					perror("File not Found");
-					DEBUG_PRINT("Could not find '.' ");error_response("404 Not Found",request[HttpURL],thread_sock,request[HttpVersion],"URL Does not Exist");
+					DEBUG_PRINT("Could not find '.' ");
+					error_response("404 Not Found",request[HttpURL],thread_sock,request[HttpVersion],"URL Does not Exist");
 					//return -1;
 				}
 
@@ -530,7 +580,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 				{
 					if (!strcmp(file_type,&config.content_type[i][1])){
 						printf("Found Content Match");
-						sprintf(response_message,"%s\r\n",config.response_type[i]);
+						sprintf(response_message,"Content-Type: %s\r\n\n",config.response_type[i]);
 						contentimpl = 1;
 						break;
 					}
@@ -543,6 +593,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 				//DEBUG_PRINT("%d %s %s",i,config.content_type[i],config.response_type[i]);
 				if (!contentimpl)
 				{
+					//error_response("404 Not Found",request[HttpURL],thread_sock,request[HttpVersion],"URL Does not Exist");
 					error_response("501 Not Implemented",file_type,thread_sock,request[HttpVersion],"File type Not Implemented");
 					printf("File type is not implemented");
 					return -1;
@@ -550,7 +601,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 
 				
 	
-				printf("%s",response_message);
+				DEBUG_PRINT("%s",response_message);
 				write(thread_sock,response_message,strlen(response_message));			
 
 			}
@@ -562,22 +613,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 			}
 			
 			
-			//for content lenght 
-			file_stats = malloc(sizeof(struct stat));
-			memset(file_stats,0,sizeof(file_stats));
-			stat(path, file_stats);
-			filesize = file_stats->st_size;
-			//DEBUG_PRINT("File size %d",filesize);
-			memset(response_message,0,strlen(response_message));
-			sprintf(response_message,"Content-Length: %d\r\n\n",(int)filesize);					
-			printf("%s",response_message);
-			write(thread_sock,response_message,strlen(response_message));		
 
-			DEBUG_PRINT("%s",response_message);
-
-			bzero(file_stats,sizeof(bzero));
-			free(file_stats);
-						
 			DEBUG_PRINT("Reading and send File data");
 			
 			memset(sendData,0,sizeof(sendData));
@@ -585,7 +621,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 			//Incoporate addition for POST Method
 			if (method == HTTP_POST){
 				//printf("POST  changes incoporated \n");
-				printf("Data from Client%s\n",request_data);
+				DEBUG_PRINT("Data from Client%s\n",request_data);
 				
 				ret = strstr(request_data,"user");
 				//user=Chinmay&comp=Shah
@@ -607,15 +643,11 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 								comp[j]=user[2][j];
 								j++;
 							}
-							if(j>MAXCOMMANDSIZE)
-							{
-								printf("Cant Find &");
-							}
-							else
-							{	
-								sprintf(response_message,"<html>\n\r<head>\r\n<h1>POST Data for test</h1>\n\r</head>\n\r<body>\n\r<pre>\n\r %s %s </pre>\n\r</body>\n</html>\n\r",comp,user[3]);
-								send(thread_sock,response_message,sizeof(response_message),0);		
-							}	
+							write(thread_sock,"response_message",sizeof("response_message"));		
+							sprintf(response_message,"<html>\n\r<head>\r\n<h1>POST Data for test</h1>\n\r</head>\n\r<body>\n\r<pre>\n\r %s %s \n\r</pre>\n\r</body>\n</html>\n\r",comp,user[3]);
+							DEBUG_PRINT("%s",response_message);
+							write(thread_sock,response_message,sizeof(response_message));		
+							
 							
 						}	
 						free(user);				
@@ -637,7 +669,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 				DEBUG_PRINT("No changes incoporated ");
 			}
 
-			printf("\nPath%s\n",path );
+			DEBUG_PRINT("\nPath%s\n",path );
 			while((send_bytes=read(filedesc,sendData,MAXBUFSIZE))>0){
 				DEBUG_PRINT("%s\n",sendData); 
 				total_size += send_bytes;
@@ -647,7 +679,7 @@ int responsetoClient(char (*request)[MAXCOLSIZE],int thread_sock,char *request_d
 			DEBUG_PRINT("Total size read %d",(int)total_size);
 			memset(response_message,0,strlen(response_message));
 			strcpy(response_message,"\nCompleted\r\n");
-			printf("%s",response_message);
+			DEBUG_PRINT("%s",response_message);
 			//write(thread_sock,response_message,strlen(response_message));		
 
 			close(filedesc);//close the file opened 
@@ -671,7 +703,8 @@ void *client_connections(void *client_sock_id)
 	char message_bkp[MAXPACKSIZE];//store message from client 
 	char (*split_attr)[MAXCOLSIZE];
 	DEBUG_PRINT("passed Client connection %d\n",(int)thread_sock);
-
+	char * keepalive=NULL;
+	int alive;
 	
 
 	
@@ -710,10 +743,32 @@ void *client_connections(void *client_sock_id)
 					DEBUG_PRINT("%d %s\n",i,split_attr[i]);
 				}
 				
-				printf("in client connections%s\n",message_bkp);
+				DEBUG_PRINT("in client connections%s\n",message_bkp);
 				
-				responsetoClient(split_attr,thread_sock,message_bkp);
-							
+				keepalive = strstr(message_bkp,"Connection: keep-alive");	
+				if (keepalive){
+
+					DEBUG_PRINT("Keepalive Data %s",keepalive);
+					alive =1;	
+					timeout.tv_sec = config.keep_alive_time;
+					timeout.tv_usec = 0;
+
+
+				}
+				else
+				{
+					alive =0;
+					DEBUG_PRINT("Could not find Connection Alive ,Set timeout 0");
+					timeout.tv_sec = 0;
+					timeout.tv_usec = 0;
+
+				}
+				responsetoClient(split_attr,thread_sock,message_bkp,alive);	
+				//Reset to UnBlocking 			
+				if (setsockopt (thread_sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout,sizeof(timeout)) < 0){
+		    		perror("setsockopt failed\n");
+		    		DEBUG_PRINT("setsockopt failed");
+		    	}	
 				//free alloaction of memory 
 				for(i=0;i<total_attr_commands;i++){
 					free((*split_attr)[i]);
@@ -740,12 +795,26 @@ void *client_connections(void *client_sock_id)
 		
 	DEBUG_PRINT("Completed \n");
 	//Closing SOCKET
-    shutdown (thread_sock, SHUT_RDWR);         //All further send and recieve operations are DISABLED...
-    close(thread_sock);
-    thread_sock=-1;
-	//free(thread_sock);//free the connection 
+	DEBUG_PRINT("Alive %d\n",alive );
 
-	//free(client_sock_id);//free the memory 
+	#ifdef ActivateAlive
+	
+		if(!alive){
+
+		    shutdown (thread_sock, SHUT_RDWR);         //All further send and recieve operations are DISABLED...
+		    close(thread_sock);
+		    thread_sock=-1;
+		    DEBUG_PRINT("Inside If case %d",alive);
+			//free(thread_sock);//free the connection 
+		  }  
+		//free(client_sock_id);//free the memory 
+	#else
+	    shutdown (thread_sock, SHUT_RDWR);         //All further send and recieve operations are DISABLED...
+	    close(thread_sock);
+	    thread_sock=-1;
+	 #endif   
+		  
+	DEBUG_PRINT("Ater Close of socket\n");		  
 	return 1 ;
 	
 }
@@ -859,6 +928,7 @@ int main (int argc, char * argv[] ){
 
 	//Accept incoming connections 
 	while((client_sock = accept(server_sock,(struct sockaddr *) &client, (socklen_t *)&remote_length))){
+		DEBUG_PRINT("In while\n");		  
 		if(client_sock<0){	
 			perror("accept  request failed");
 			exit(-1);
